@@ -87,75 +87,88 @@ int main(){
         auto bt = kautil::algorithm::btree_search{&pref};
         
         
-        auto from = value_type(0);auto to = value_type(0);
+        auto max_pos = pref.size();
+        auto min_pos = 0;
         
+        auto from = value_type(0);auto to = value_type(0);
         from = 0;to = 0;
         from = 0;to = 5;
+        from = 2000;to = 2005;
+        from = 5;to = 15;
+        
         
         auto b0 = bt.search(from,false);
         auto b1 = bt.search(to,false);
         
+        
         auto begin = offset_type (0),end = offset_type(0);
         {// adjusting pos 
             auto adjust_pos = [](auto & b0,bool is_from) -> offset_type {
+                auto block_size =(sizeof(value_type)*2);
+                auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+                return static_cast<offset_type>(
+                    !(b0.overflow|b0.nan)*(
+                         ((is_from &  b0_nearest_is_former &(b0.direction >= 0)) * (b0.nearest_pos+(sizeof(value_type))))
+                        +((is_from &  !b0_nearest_is_former &(b0.direction <= 0)) *  b0.nearest_pos)
+                        +((!is_from & b0_nearest_is_former &(b0.direction >= 0))* (b0.nearest_pos+(-sizeof(value_type))))
+                        +((!is_from & !b0_nearest_is_former &(b0.direction <= 0))*  b0.nearest_pos)
+                    )
+                );
+            };
+            
+            // contained or not contained 
+            
                 
+            auto is_contained = [](auto & b0){
                 auto block_size =(sizeof(value_type)*2);
                 auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
                 auto b0_cond_not_contained = 
                          (b0_nearest_is_former&(b0.direction < 0))
                         |(!b0_nearest_is_former&(b0.direction > 0));
-                auto b0_cond_contained = !(b0_cond_not_contained|b0.overflow);
-                auto positive_adjust = offset_type(-sizeof(value_type));
-                auto negative_adjust = offset_type(sizeof(value_type));
-                auto adjust_pos = static_cast<offset_type>(
-                    !(b0.overflow|b0.nan)*(
-                          (is_from &  b0_nearest_is_former &(b0.direction >= 0))*sizeof(value_type)
-                        +(!is_from & !b0_nearest_is_former &(b0.direction <= 0))*(-sizeof(value_type))
-                    )
-                );
-                return (b0.nearest_pos+adjust_pos); 
+                return !(b0_cond_not_contained|b0.overflow);
             };
+            auto b0_is_contaied = is_contained(b0);
+            auto b1_is_contaied = is_contained(b1);
+            
+            // !b0_is_contaied then first b0 is from
+            // !b1_is_contaied then first b1 is to
+            
+            auto fsize = pref.size();
+            begin = adjust_pos(b0,true);
+            end   = adjust_pos(b1,false);
+            
+            printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
             
             auto ovf_cnt = int(0);{
                 auto calc_ovf_count = [](auto & b0,bool is_from)->int{
                     // is_from & overflow(f or l)
                         // ovf(f) : ovf_count+=2
-                        // ovf(l) : ovf_count+=1
+                        // ovf(l) : ovf_count+=1 : ignore
                     // !is_from & overflow(f or l)
-                        // ovf(f) : ovf_count+=1
+                        // ovf(f) : ovf_count+=1 : ignore 
                         // ovf(l) : ovf_count+=2
-                    auto a = 2*(is_from & b0.overflow & (b0.direction < 0));
-                    auto b = +1*(is_from & b0.overflow & (b0.direction > 0));
-                    auto c = +1*(!is_from & b0.overflow & (b0.direction < 0));
-                    auto e = +2*(!is_from & b0.overflow & (b0.direction > 0));
                     return 
-                         2*(is_from & b0.overflow & (b0.direction < 0))
-                        +1*(is_from & b0.overflow & (b0.direction > 0))
-                        +1*(!is_from & b0.overflow & (b0.direction < 0))
+                         -2*(is_from & b0.overflow & (b0.direction < 0))
                         +2*(!is_from & b0.overflow & (b0.direction > 0)); 
                 };
                 ovf_cnt+=calc_ovf_count(b0,true);
                 ovf_cnt+=calc_ovf_count(b1,false);
-                ovf_cnt=ovf_cnt/2*2; // maximum number should be 2
+                printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
+            }// ovf_cnt
+            
+            {// iterate
+                auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
+                if(ovf_cnt < 0)printf("ovf(l) begin,end(%ld,%ld)\n",from,to);
+                for(auto cur = begin; cur < end; cur+=block_size){
+                    printf("%ld begin,end(%ld,%ld)\n",cur,begin,end); fflush(stdout);
+                }
+                if(ovf_cnt > 0)printf("ovf(u) begin,end(%ld,%ld)\n",from,to);
+                // next
+                // is_end
             }
-                
-            auto fsize = pref.size();
-            begin = adjust_pos(b0,true);
-            end   = adjust_pos(b1,false);
+            
         }
-        printf("begin,end(%ld,%ld)\n",begin,end); fflush(stdout);
         
-        
-        
-        
-//        {// iterate
-//            auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
-//            for(auto cur = begin; cur < end; cur+=block_size){
-//                printf("%ld begin,end(%ld,%ld)\n",cur,begin,end); fflush(stdout);
-//            }
-//            // next
-//            // is_end
-//        }
         
         
     }
