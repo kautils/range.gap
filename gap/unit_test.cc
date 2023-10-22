@@ -96,20 +96,27 @@ int main(){
         
         auto begin = offset_type (0),end = offset_type(0);
         {// adjusting pos 
-            auto adjust_pos = [](auto & b0, offset_type const& b0_adjust_pos) -> offset_type {
+            auto adjust_pos = [](auto & b0,offset_type const& b0_adjust_pos,bool is_from) -> offset_type {
+                
                 auto block_size =(sizeof(value_type)*2);
-                auto b0_is_former = !bool(b0.nearest_pos % block_size);
+                auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
                 auto b0_cond_not_contained = 
-                         !(b0_is_former&(b0.direction < 0))
-                        &!(!b0_is_former&(b0.direction > 0));
-                auto b0_cond_over_flow = b0.overflow;
-                auto b0_cond_adjust_pos = !(b0_cond_not_contained|b0_cond_over_flow);
-                return (b0.nearest_pos+b0_cond_adjust_pos*b0_adjust_pos); 
+                         (b0_nearest_is_former&(b0.direction < 0))
+                        |(!b0_nearest_is_former&(b0.direction > 0));
+                auto b0_cond_contained = !(b0_cond_not_contained|b0.overflow);
+
+                auto adjust_pos = static_cast<offset_type>(
+                    !(b0.overflow|b0.nan)*(
+                          (is_from &  b0_nearest_is_former &(b0.direction >= 0))*sizeof(value_type)
+                        +(!is_from & !b0_nearest_is_former &(b0.direction <= 0))*(-sizeof(value_type))
+                    )
+                );
+                return (b0.nearest_pos+adjust_pos); 
             };
             
             auto fsize = pref.size();
-            begin = adjust_pos(b0,-sizeof(value_type));
-            end   = adjust_pos(b1,+sizeof(value_type));
+            begin = adjust_pos(b0,-sizeof(value_type),true);
+            end   = adjust_pos(b1,+sizeof(value_type),false);
             //end += sizeof(value_type);
         }
         
@@ -122,8 +129,6 @@ int main(){
             // next
             // is_end
         }
-        
-        
         
         
         
