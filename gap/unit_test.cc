@@ -87,8 +87,8 @@ int main(){
         auto bt = kautil::algorithm::btree_search{&pref};
         
         
-        auto from = value_type(0);
-        auto to = value_type(0);
+        auto from = value_type(10);
+        auto to = value_type(100);
         
         auto b0 = bt.search(from,false);
         auto b1 = bt.search(to,false);
@@ -96,20 +96,29 @@ int main(){
         
         auto begin = offset_type (0),end = offset_type(0);
         {// adjusting pos 
-            auto adjust_pos = [](auto & b0, auto const& b0_adjust_pos) -> offset_type {
+            auto adjust_pos = [](auto & b0, offset_type const& b0_adjust_pos) -> offset_type {
                 auto block_size =(sizeof(value_type)*2);
                 auto b0_is_former = !bool(b0.nearest_pos % block_size);
-                auto b0_cond_not_contained = !b0_is_former&(b0.direction < 0);
+                auto b0_cond_not_contained = 
+                         !(b0_is_former&(b0.direction < 0))
+                        &!(!b0_is_former&(b0.direction > 0));
                 auto b0_cond_over_flow = b0.overflow;
                 auto b0_cond_adjust_pos = !(b0_cond_not_contained|b0_cond_over_flow);
-                return !b0_is_former*b0_adjust_pos; 
+                return (b0.nearest_pos+b0_cond_adjust_pos*b0_adjust_pos); 
             };
             
+            auto fsize = pref.size();
             begin = adjust_pos(b0,-sizeof(value_type));
             end   = adjust_pos(b1,+sizeof(value_type));
+            //end += sizeof(value_type);
         }
-
+        
+        
         {// iterate
+            auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
+            for(auto cur = begin; cur < end; cur+=block_size){
+                printf("%ld begin,end(%ld,%ld)\n",cur,begin,end); fflush(stdout);
+            }
             // next
             // is_end
         }
