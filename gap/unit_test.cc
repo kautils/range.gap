@@ -115,10 +115,8 @@ int main(){
                     )
                 );
             };
-            
             // contained or not contained 
             
-                
             auto is_contained = [](auto & b0){
                 auto block_size =(sizeof(value_type)*2);
                 auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
@@ -130,8 +128,16 @@ int main(){
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
             
-            // !b0_is_contaied then first b0 is from
-            // !b1_is_contaied then first b1 is to
+            
+            auto left_v = 1234; // left pole value
+            auto right_v = 4567;// right pole value
+            from = 
+                    !b0_is_contaied*from
+                    +b0_is_contaied*right_v;
+            to = 
+                    !b1_is_contaied*to
+                    +b1_is_contaied*left_v;
+            
             
             auto fsize = pref.size();
             begin = adjust_pos(b0,true);
@@ -158,7 +164,9 @@ int main(){
             
             {// iterate
                 auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
-                if(ovf_cnt < 0)printf("ovf(l) begin,end(%ld,%ld)\n",from,to);
+                if(ovf_cnt < 0){
+                    printf("ovf(l) begin,end(%ld,%ld)\n",from,to);
+                }
                 for(auto cur = begin; cur < end; cur+=block_size){
                     printf("%ld begin,end(%ld,%ld)\n",cur,begin,end); fflush(stdout);
                 }
