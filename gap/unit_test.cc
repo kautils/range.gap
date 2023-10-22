@@ -94,17 +94,25 @@ int main(){
         auto b1 = bt.search(to,false);
         
         
-        auto adjust_pos = [](auto & b0, auto const& b0_adjust_pos){
-            auto block_size =(sizeof(value_type)*2);
-            auto b0_is_former = !bool(b0.nearest_pos % block_size);
-            auto b0_cond_not_contained = !b0_is_former&(b0.direction < 0);
-            auto b0_cond_over_flow = b0.overflow;
-            auto b0_cond_adjust_pos = !(b0_cond_not_contained|b0_cond_over_flow);
-            return !b0_is_former*b0_adjust_pos; 
-        };
-        
-        auto begin = adjust_pos(b0,-sizeof(value_type));
-        auto end   = adjust_pos(b1,+sizeof(value_type));
+        auto begin = offset_type (0),end = offset_type(0);
+        {// adjusting pos 
+            auto adjust_pos = [](auto & b0, auto const& b0_adjust_pos) -> offset_type {
+                auto block_size =(sizeof(value_type)*2);
+                auto b0_is_former = !bool(b0.nearest_pos % block_size);
+                auto b0_cond_not_contained = !b0_is_former&(b0.direction < 0);
+                auto b0_cond_over_flow = b0.overflow;
+                auto b0_cond_adjust_pos = !(b0_cond_not_contained|b0_cond_over_flow);
+                return !b0_is_former*b0_adjust_pos; 
+            };
+            
+            begin = adjust_pos(b0,-sizeof(value_type));
+            end   = adjust_pos(b1,+sizeof(value_type));
+        }
+
+        {// iterate
+            // next
+            // is_end
+        }
         
         
         
