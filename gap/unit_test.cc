@@ -75,68 +75,97 @@ int main(){
     }
     
     auto f_ranges = fopen("tmain_kautil_range_exsits_interface.cache","w+b");
-    auto written = fwrite(data.data(),sizeof(value_type),data.size(),f_ranges);
-    fflush(f_ranges);
-
-
     {
+        auto written = fwrite(data.data(),sizeof(value_type),data.size(),f_ranges);
+        fflush(f_ranges);
+        
         auto fd = fileno(f_ranges);
         printf("file size : %ld\n",lseek(fd,0,SEEK_END)-lseek(fd,0,SEEK_SET));
+    }
+
+    
+    auto adjust_pos = [](auto & b0,bool is_from) -> offset_type {
+    auto block_size =(sizeof(value_type)*2);
+    auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+        return static_cast<offset_type>(
+            !(b0.overflow|b0.nan)*(
+                 ((is_from &  b0_nearest_is_former &(b0.direction >= 0)) * (b0.nearest_pos+(sizeof(value_type))))
+                +((is_from &  !b0_nearest_is_former &(b0.direction <= 0)) *  b0.nearest_pos)
+                +((!is_from & b0_nearest_is_former &(b0.direction >= 0))* (b0.nearest_pos+(-sizeof(value_type))))
+                +((!is_from & !b0_nearest_is_former &(b0.direction <= 0))*  b0.nearest_pos)
+            )
+        );
+    };
+    // contained or not contained 
+    
+    auto is_contained = [](auto & b0){
+        auto block_size =(sizeof(value_type)*2);
+        auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+        auto b0_cond_not_contained = 
+                 (b0_nearest_is_former&(b0.direction < 0))
+                |(!b0_nearest_is_former&(b0.direction > 0));
+        return !(b0_cond_not_contained|b0.overflow);
+    };
+    
+    auto read_lvalue = [](auto & res,auto & b0,auto & pref){
+        auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
+        auto ptr = &res;
+        if(is_even){
+            pref.read_value(b0.nearest_pos,&ptr);
+        }else{
+            pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
+        }
+    };
+    
+    auto read_rvalue = [](auto & res,auto & b0,auto & pref){
+        auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
+        auto ptr = &res;
+        if(is_even){
+            pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
+        }else{
+            pref.read_value(b0.nearest_pos,&ptr);
+        }
+    };
+
+    auto calc_ovf_count = [](auto & b0,bool is_from)->int{
+        // is_from & overflow(f or l)
+            // ovf(f) : ovf_count+=2
+            // ovf(l) : ignore
+        // !is_from & overflow(f or l)
+            // ovf(f) : ignore 
+            // ovf(l) : ovf_count+=2
+        return 
+             -2*(is_from & b0.overflow & (b0.direction < 0))
+            +2*(!is_from & b0.overflow & (b0.direction > 0)); 
+    };
+
+    
+    {
         
-        auto pref = file_syscall_16b_pref{.fd=fd};
+        auto pref = file_syscall_16b_pref{.fd=fileno(f_ranges)};
         auto bt = kautil::algorithm::btree_search{&pref};
-        
         
         auto max_pos = pref.size();
         auto min_pos = 0;
-        
         auto from = value_type(0);auto to = value_type(0);
-        from = 0;to = 0;
-        from = 0;to = 5;
-        from = 2000;to = 2005;
-        from = 5;to = 15;
-        
+        {
+            from = 0;to = 0;
+            from = 0;to = 5;
+            from = 2000;to = 2005;
+            from = 5;to = 15;
+        }
         
         auto b0 = bt.search(from,false);
         auto b1 = bt.search(to,false);
         
         
-        auto begin = offset_type (0),end = offset_type(0);
-        {// adjusting pos 
-            auto adjust_pos = [](auto & b0,bool is_from) -> offset_type {
-                auto block_size =(sizeof(value_type)*2);
-                auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
-                return static_cast<offset_type>(
-                    !(b0.overflow|b0.nan)*(
-                         ((is_from &  b0_nearest_is_former &(b0.direction >= 0)) * (b0.nearest_pos+(sizeof(value_type))))
-                        +((is_from &  !b0_nearest_is_former &(b0.direction <= 0)) *  b0.nearest_pos)
-                        +((!is_from & b0_nearest_is_former &(b0.direction >= 0))* (b0.nearest_pos+(-sizeof(value_type))))
-                        +((!is_from & !b0_nearest_is_former &(b0.direction <= 0))*  b0.nearest_pos)
-                    )
-                );
-            };
-            // contained or not contained 
-            
-            auto is_contained = [](auto & b0){
-                auto block_size =(sizeof(value_type)*2);
-                auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
-                auto b0_cond_not_contained = 
-                         (b0_nearest_is_former&(b0.direction < 0))
-                        |(!b0_nearest_is_former&(b0.direction > 0));
-                return !(b0_cond_not_contained|b0.overflow);
-            };
+        auto begin = offset_type (0),end = offset_type(0);{ // begin , end 
+
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
             
-            
-            auto left_v = 1234; // left pole value
-            auto right_v = 4567;// right pole value
-            from = 
-                    !b0_is_contaied*from
-                    +b0_is_contaied*right_v;
-            to = 
-                    !b1_is_contaied*to
-                    +b1_is_contaied*left_v;
+            if(b0_is_contaied) read_rvalue(from,b0,pref);
+            if(b1_is_contaied) read_lvalue(to,b1,pref);
             
             
             auto fsize = pref.size();
@@ -144,40 +173,27 @@ int main(){
             end   = adjust_pos(b1,false);
             
             printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
-            
-            auto ovf_cnt = int(0);{
-                auto calc_ovf_count = [](auto & b0,bool is_from)->int{
-                    // is_from & overflow(f or l)
-                        // ovf(f) : ovf_count+=2
-                        // ovf(l) : ovf_count+=1 : ignore
-                    // !is_from & overflow(f or l)
-                        // ovf(f) : ovf_count+=1 : ignore 
-                        // ovf(l) : ovf_count+=2
-                    return 
-                         -2*(is_from & b0.overflow & (b0.direction < 0))
-                        +2*(!is_from & b0.overflow & (b0.direction > 0)); 
-                };
-                ovf_cnt+=calc_ovf_count(b0,true);
-                ovf_cnt+=calc_ovf_count(b1,false);
-                printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
-            }// ovf_cnt
-            
-            {// iterate
-                auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
-                if(ovf_cnt < 0){
-                    printf("ovf(l) begin,end(%ld,%ld)\n",from,to);
-                }
-                for(auto cur = begin; cur < end; cur+=block_size){
-                    printf("%ld begin,end(%ld,%ld)\n",cur,begin,end); fflush(stdout);
-                }
-                if(ovf_cnt > 0)printf("ovf(u) begin,end(%ld,%ld)\n",from,to);
-                // next
-                // is_end
+        }// begin , end
+        
+        auto ovf_cnt = int(0);{
+            ovf_cnt+=calc_ovf_count(b0,true);
+            ovf_cnt+=calc_ovf_count(b1,false);
+            printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
+        }// ovf_cnt
+        
+        
+        {// iterate
+            auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
+            if(ovf_cnt < 0){
+                printf("ovf(l) begin,end(%ld,%ld)\n",from,to);
             }
-            
-        }
-        
-        
+            for(auto cur = begin; cur < end; cur+=block_size){
+                printf("%ld begin,end(%ld,%ld)\n",cur,begin,end); fflush(stdout);
+            }
+            if(ovf_cnt > 0)printf("ovf(u) begin,end(%ld,%ld)\n",from,to);
+            // next
+            // is_end
+        }// iterate
         
     }
     
