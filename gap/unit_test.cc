@@ -232,8 +232,8 @@ int main(){
         {
 //            from = 0;to = 0; // both ovf(l) expect 0,0 
 //            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
-            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
-//            from = 0;to = 25; // either ovf(l) expect 0 10 
+//            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
+            from = 0;to = 25; // either ovf(l) expect 0 10 
 //            from = 26;to = 34; // either ovf(l) expect 0 10 
 //            from = 0;to = 15; // either ovf(l) expect 0 10   
 //            from = 0;to = 40; // either ovf(l)  
@@ -328,11 +328,9 @@ int main(){
                 
                 auto max_pos = pref->size();
                 auto min_pos = 0;
-                
                 {
                     // b0 : l(from) r(region)
                     // b1 : l(region) r(to)
-                    
                     {// decide to which(l or r) the value is loaded 
                         auto p = reinterpret_cast<value_type*>(
                                  lr*uintptr_t(&cur.r)
@@ -371,11 +369,8 @@ int main(){
                     printf("kBothOvfSame\n");fflush(stdout);
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
-                    /* todo : express first(from,arr[0]) and last(arr[last],to)*/
-                    
                     lmb_virtual_value(from,to,true,&pref);
                     lmb_virtual_value(from,to,false,&pref);
-                    
                 }else if(ovf_state&kEitherOvf){
                     printf("kEitherOvf\n");fflush(stdout);
                     lmb_virtual_value(from,to,b0.overflow,&pref);
@@ -386,29 +381,18 @@ int main(){
                 if(!(ovf_state&kBothOvfSame)){
                 
                     auto block_size = sizeof(value_type)*2;
-                    auto b0_ignore = b0.overflow;
-                    auto b1_ignore = b1.overflow;
                     
                     // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
                     // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
-                    auto b0_belongs_to = (b0.nearest_pos-(!b0_is_contaied*sizeof(value_type)))/block_size*block_size; 
-                    auto b1_belongs_to = (b1.nearest_pos-(!b1_is_contaied*sizeof(value_type)))/block_size*block_size; 
                     
                     // adjust b1_ignore
                         // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
-                    b1_ignore =
-                        !(
-                             (b0_ignore&b1_ignore)
-                            &(b0_belongs_to==b1_belongs_to)
-                        );
-    
-    
                     {
                         if((begin==end) & !b1_is_contaied){
                             auto value_ptr = &cur.l;
                             pref.read_value(begin,&value_ptr);
                             cur.r=to;
-                            printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
+                            printf("++++ virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
                         }
                     }
                     
