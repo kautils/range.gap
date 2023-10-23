@@ -149,8 +149,8 @@ int main(){
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect 2000,2005
-            from = 0;to = 25; // either ovf(l) expect 0 10 
-//            from = 0;to = 15; // either ovf(l) expect 0 10 
+//            from = 0;to = 25; // either ovf(l) expect 0 10 
+//            from = 0;to = 15; // either ovf(l) expect 0 10   
 //            from = 0;to = 40; // either ovf(l)  
 //            from = 15;to = 2005; // either ovf(u) 
 //            from = 25;to = 2005; // either ovf(u)  
@@ -189,8 +189,6 @@ int main(){
                     pref.read_value(b1.nearest_pos,&ptr);
                 }
             }
-            
-            
             
             
             auto fsize = pref.size();
@@ -244,8 +242,15 @@ int main(){
                 
                 if(ovf_state&kBothOvfSame){
                     printf("kBothOvfSame\n");fflush(stdout);
+                    begin=end =0;
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
+                    begin = sizeof(value_type);
+                    end = b1.overflow*(max_pos-(sizeof(value_type)*2) );
+                    
+                    /* todo : express first(from,arr[0]) and last(arr[last],to)*/
+                    
+                    
                 }else if(ovf_state&kEitherOvf){
                     printf("kEitherOvf\n");fflush(stdout);
                     {
@@ -289,6 +294,9 @@ int main(){
                     printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                 }
                 
+//                if(!(ovf_state&kBothOvfSame)){
+                
+                
                 auto block_size = sizeof(value_type)*2;
                 auto b0_ignore = b0.overflow;
                 auto b1_ignore = b1.overflow;
@@ -307,7 +315,7 @@ int main(){
                     );
                 
                 // if both are belongs to the same block, then ignore count should be 1. 
-                for(auto cur = begin; b0_ignore|(cur < end); /*cur+=block_size*/){
+                for(auto cur = begin; /*b0_ignore|*/(cur < end); cur+=block_size){
                     auto value = value_type(0);
                     auto value_ptr = &value;
                     printf("begin,end");
@@ -318,10 +326,9 @@ int main(){
                     printf("%ld)\n",adjust_value*to + !adjust_value*value);
                     fflush(stdout);
                     l_adj=false;
-                    cur+=!b0_ignore*block_size;
-                    b0_ignore = false;
                 }
 
+//                }
                 
                 
             }// iterate
