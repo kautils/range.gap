@@ -94,55 +94,42 @@ struct gap_iterator{
         
         begin_ = adjust_pos(b0,true,from);
         end_= adjust_pos(b1,false,to);
+            {
+                auto both_is_ovf = (b0.overflow&b1.overflow);
+                auto either_is_ovf = (b0.overflow^b1.overflow);
+                auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
+                ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
+                ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
+                ovf_state|=kEitherOvf*either_is_ovf;
+            }
 
-        {
-            auto both_is_ovf = (b0.overflow&b1.overflow);
-            auto either_is_ovf = (b0.overflow^b1.overflow);
-            auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
-            ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
-            ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
-            ovf_state|=kEitherOvf*either_is_ovf;
-        }
-        
-        
-        auto is_ovf_either_begin = bool(
-              (ovf_state&kBothOvfDifferent)
-            + (ovf_state&kEitherOvf)&b0.overflow
-        ); 
-        
-        auto is_ovf_either_end = bool(
-              (ovf_state&kBothOvfDifferent)
-            + (ovf_state&kEitherOvf)&b1.overflow
-        ); 
-        
-        auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
-        
-        
-        auto is_ovf_adjust_begin = 
-             is_ovf_either_begin
-            |is_ovf_adjust_not_need_itreation;
-        
-        auto is_ovf_adjust_end = 
-             is_ovf_either_end
-            |is_ovf_adjust_not_need_itreation;
-        
-        
-        begin_ = 
-                is_ovf_either_begin*(
-                      min_pos*(ovf_state&kBothOvfDifferent)
-                    + min_pos*(ovf_state&kEitherOvf)&b0.overflow
-                ) 
-                + !(ovf_state&kBothOvfSame); 
-                + !is_ovf_adjust_begin*begin_;
-        
-        end_ =
-                is_ovf_either_end*(
-                      max_pos*(ovf_state&kBothOvfDifferent)
-                    + max_pos*(ovf_state&kEitherOvf)&b1.overflow
-                )
-                + !(ovf_state&kBothOvfSame);
-                + !is_ovf_adjust_end*end_;
-        
+            auto is_ovf_either = bool(ovf_state&kEitherOvf); 
+            auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
+            auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
+            
+            
+            //is_ovf_different
+            begin_ = 
+                      is_ovf_different*sizeof(value_type)
+                    +!is_ovf_different*begin_;
+            
+            end_ = 
+                      is_ovf_different*(max_pos-(sizeof(value_type)*2))
+                    +!is_ovf_different*end_;
+            
+            //is_ovf_either_begin
+            begin_ = 
+                      is_ovf_either*(!b0.overflow*begin_ +b0.overflow*sizeof(value_type))
+                    +!is_ovf_either*begin_;
+            end_ = 
+                     is_ovf_either*(!b1.overflow*end_ + b1.overflow*(max_pos-sizeof(value_type)))
+                   +!is_ovf_either*end_;
+            
+            // is_same
+            begin_*=!is_ovf_adjust_not_need_itreation;
+            end_*=!is_ovf_adjust_not_need_itreation;
+
+
                 
     }
 
