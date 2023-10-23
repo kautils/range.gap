@@ -60,7 +60,6 @@ using file_syscall_16b_pref= file_syscall_premitive<uint64_t>;
 using file_syscall_16b_f_pref= file_syscall_premitive<double>;
 
 
-
 #include "kautil/algorithm/btree_search/btree_search.hpp"
 
 int main(){
@@ -149,11 +148,13 @@ int main(){
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect 2000,2005
-//            from = 0;to = 25; // either ovf(l) expect 0 10 
-//            from = 0;to = 15; // either ovf(l) expect 0 10   
-//            from = 0;to = 40; // either ovf(l)  
-//            from = 15;to = 2005; // either ovf(u) 
-//            from = 25;to = 2005; // either ovf(u)  
+            from = 0;to = 25; // either ovf(l) expect 0 10 
+            from = 26;to = 34; // either ovf(l) expect 0 10 
+            from = 0;to = 15; // either ovf(l) expect 0 10   
+            from = 0;to = 40; // either ovf(l)  
+            from = 15;to = 2005; // either ovf(u) 
+            from = 25;to = 2005; // either ovf(u)  
+            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
@@ -166,9 +167,9 @@ int main(){
         constexpr auto kEitherOvf=8;
         int ovf_state = 0;
         auto begin = offset_type (0),end = offset_type(0);{ // begin , end 
-            
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
+            
             
 //            {// adjust [from|to] when it is contained 
 //                if(b0_is_contaied) read_rvalue(from,b0,pref);
@@ -247,10 +248,7 @@ int main(){
                     printf("kBothOvfDifferent\n");fflush(stdout);
                     begin = sizeof(value_type);
                     end = b1.overflow*(max_pos-(sizeof(value_type)*2) );
-                    
                     /* todo : express first(from,arr[0]) and last(arr[last],to)*/
-                    
-                    
                 }else if(ovf_state&kEitherOvf){
                     printf("kEitherOvf\n");fflush(stdout);
                     {
@@ -294,41 +292,59 @@ int main(){
                     printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                 }
                 
-//                if(!(ovf_state&kBothOvfSame)){
+                if(!(ovf_state&kBothOvfSame)){
                 
-                
-                auto block_size = sizeof(value_type)*2;
-                auto b0_ignore = b0.overflow;
-                auto b1_ignore = b1.overflow;
-                
-                // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
-                // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
-                auto b0_belongs_to = (b0.nearest_pos-(!b0_is_contaied*sizeof(value_type)))/block_size*block_size; 
-                auto b1_belongs_to = (b1.nearest_pos-(!b1_is_contaied*sizeof(value_type)))/block_size*block_size; 
-                
-                // adjust b1_ignore
-                    // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
-                b1_ignore =
-                    !(
-                         (b0_ignore&b1_ignore)
-                        &(b0_belongs_to==b1_belongs_to)
-                    );
-                
-                // if both are belongs to the same block, then ignore count should be 1. 
-                for(auto cur = begin; /*b0_ignore|*/(cur < end); cur+=block_size){
-                    auto value = value_type(0);
-                    auto value_ptr = &value;
-                    printf("begin,end");
-                    pref.read_value(cur,&value_ptr);
-                    printf("(%ld,",l_adj*from+!l_adj*value);
-                    pref.read_value(cur+sizeof(value_type),&value_ptr);
-                    auto adjust_value = (r_adj&(cur+block_size >= end));
-                    printf("%ld)\n",adjust_value*to + !adjust_value*value);
-                    fflush(stdout);
-                    l_adj=false;
-                }
+                    
+                    auto block_size = sizeof(value_type)*2;
+                    auto b0_ignore = b0.overflow;
+                    auto b1_ignore = b1.overflow;
+                    
+                    // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
+                    // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
+                    auto b0_belongs_to = (b0.nearest_pos-(!b0_is_contaied*sizeof(value_type)))/block_size*block_size; 
+                    auto b1_belongs_to = (b1.nearest_pos-(!b1_is_contaied*sizeof(value_type)))/block_size*block_size; 
+                    
+                    // adjust b1_ignore
+                        // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
+                    b1_ignore =
+                        !(
+                             (b0_ignore&b1_ignore)
+                            &(b0_belongs_to==b1_belongs_to)
+                        );
+    
+    
+                    {
+                        if((begin==end) & !b1_is_contaied){
+                            auto value_ptr = &cur.l;
+                            pref.read_value(begin,&value_ptr);
+                            cur.r=to;
+                            printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
+                        }
+//                        if((begin==end) & !b0_is_contaied){
+//                            printf("!!!check carefully. compare with above block \"if((begin==end) & !b1_is_contaied)\".");
+//                            cur.l=from;
+//                            auto value_ptr = &cur.r;
+//                            pref.read_value(begin,&value_ptr);
+//                            printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
+//                        }
+                    }
+                    
+                    
+                    // if both are belongs to the same block, then ignore count should be 1. 
+                    for(auto cur = begin; /*b0_ignore|*/(cur < end); cur+=block_size){
+                        auto value = value_type(0);
+                        auto value_ptr = &value;
+                        printf("begin,end");
+                        pref.read_value(cur,&value_ptr);
+                        printf("(%ld,",l_adj*from+!l_adj*value);
+                        pref.read_value(cur+sizeof(value_type),&value_ptr);
+                        auto adjust_value = (r_adj&(cur+block_size >= end));
+                        printf("%ld)\n",adjust_value*to + !adjust_value*value);
+                        fflush(stdout);
+                        l_adj=false;
+                    }
 
-//                }
+                }
                 
                 
             }// iterate
