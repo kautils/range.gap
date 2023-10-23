@@ -232,7 +232,7 @@ int main(){
         {
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
-            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
+            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
             from = 0;to = 24; // either ovf(l) expect 0 10 
             from = 26;to = 34; // either ovf(l) expect 0 10 
             from = 0;to = 15; // either ovf(l) expect 0 10   
@@ -377,43 +377,22 @@ int main(){
                 }
                 
                 
-                
                 if(!(ovf_state&kBothOvfSame)){
+                    auto l = value_type(0);
+                    auto r = value_type(0);
+                    auto value_ptr = (value_type*) 0;  
                     constexpr auto block_size = sizeof(value_type)*2;
-                    
-                    // if both are belongs to the same block, then ignore count should be 1. 
                     for(auto cur = begin; cur < end; cur+=block_size){
-                        auto value = value_type(0);
-                        auto value_ptr = &value;
-                        printf("begin,end");
-                        pref.read_value(cur,&value_ptr);
-                        printf("(%ld,",l_adj*from+!l_adj*value);
-                        pref.read_value(cur+sizeof(value_type),&value_ptr);
-                        auto adjust_value = (r_adj&(cur+block_size >= end));
-                        printf("%ld)\n",adjust_value*to + !adjust_value*value);
-                        fflush(stdout);
+                        pref.read_value(cur,&(value_ptr = &l));
+                        pref.read_value(cur+sizeof(value_type),&(value_ptr = &r));
+                        // auto adjust_r = (r_adj&(cur+block_size >= end));
+//                        printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,adjust_r*to+!adjust_r*r);
+                        printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,r_adj*to+!r_adj*r);fflush(stdout);
                         l_adj=false;
                     }
                 }
             }// iterate
         }// begin , end
-        
-        
-        
-//        auto gap_iterator=[](auto from,auto to,auto pref){
-//            auto bt = kautil::algorithm::btree_search{&pref};
-//            auto b0 = bt.search(from,false);
-//            auto b1 = bt.search(to,false);
-//        };
-
-        
-        
-        
-        
-        
-        
-        
-        
         
         
         
