@@ -150,8 +150,8 @@ int main(){
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect 2000,2005
             from = 0;to = 25; // either ovf(l) expect 0 10 
-            from = 0;to = 15; // either ovf(l) expect 0 10 
-            from = 0;to = 40; // either ovf(l) expect 0 10 
+//            from = 0;to = 15; // either ovf(l) expect 0 10 
+//            from = 0;to = 40; // either ovf(l)  
 //            from = 15;to = 2005; // either ovf(u) 
 //            from = 25;to = 2005; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
@@ -170,11 +170,29 @@ int main(){
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
             
-            {// adjust [from|to] when it is contained 
-                if(b0_is_contaied) read_rvalue(from,b0,pref);
-                if(b1_is_contaied) read_lvalue(to,b1,pref);
-            }
+//            {// adjust [from|to] when it is contained 
+//                if(b0_is_contaied) read_rvalue(from,b0,pref);
+//                if(b1_is_contaied) read_lvalue(to,b1,pref);
+//            }
 
+            {
+                auto block_size = sizeof(value_type)*2;
+                if(!bool(b0.nearest_pos%block_size)&b0_is_contaied){
+                    b0.nearest_pos+=sizeof(value_type);
+                    auto ptr = &b0.nearest_value;
+                    pref.read_value(b0.nearest_pos,&ptr);
+                }
+                
+                if(bool(b1.nearest_pos%block_size)&b1_is_contaied){
+                    b1.nearest_pos-=sizeof(value_type);
+                    auto ptr = &b1.nearest_value;
+                    pref.read_value(b1.nearest_pos,&ptr);
+                }
+            }
+            
+            
+            
+            
             auto fsize = pref.size();
             begin = adjust_pos(b0,true,from);
             end   = adjust_pos(b1,false,to);
@@ -189,31 +207,29 @@ int main(){
                 ovf_state|=kEitherOvf*either_is_ovf;
             }
             
-            auto adjust_begin = bool(
-                  min_pos*(ovf_state&kBothOvfDifferent)
-                + min_pos*(ovf_state&kEitherOvf)&b0.overflow
+            auto is_adjust_begin = bool(
+                  (ovf_state&kBothOvfDifferent)
+                + (ovf_state&kEitherOvf)&b0.overflow
             ); 
             
-            auto adjust_end = bool(
-                  max_pos*(ovf_state&kBothOvfDifferent)
-                + max_pos*(ovf_state&kEitherOvf)&b1.overflow
+            auto is_adjust_end = bool(
+                  (ovf_state&kBothOvfDifferent)
+                + (ovf_state&kEitherOvf)&b1.overflow
             ); 
             
             begin = 
-                    adjust_begin*(
+                    is_adjust_begin*(
                           min_pos*(ovf_state&kBothOvfDifferent)
                         + min_pos*(ovf_state&kEitherOvf)&b0.overflow
                     ) 
-                    +!adjust_begin*begin;
+                    +!is_adjust_begin*begin;
             
             end =
-                    adjust_end*(
+                    is_adjust_end*(
                           max_pos*(ovf_state&kBothOvfDifferent)
                         + max_pos*(ovf_state&kEitherOvf)&b1.overflow
                     )
-                    +!adjust_end*end;
-            
-            
+                    +!is_adjust_end*end;
             
             
             {// iterate
@@ -223,78 +239,89 @@ int main(){
                     value_type r =0;
                 } cur;
                 
+                auto l_adj = false;
+                auto r_adj = false;
                 
                 if(ovf_state&kBothOvfSame){
                     printf("kBothOvfSame\n");fflush(stdout);
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
                 }else if(ovf_state&kEitherOvf){
-                    
                     printf("kEitherOvf\n");fflush(stdout);
-                    auto v = value_type(0);
                     {
-                        auto p = reinterpret_cast<value_type*>(
-                                 b0.overflow*uintptr_t(&cur.r)
-                                +b1.overflow*uintptr_t(&cur.l));
-                        auto pos_pol = b0.overflow*min_pos+b1.overflow*(max_pos-sizeof(value_type));
-                        pref.read_value(pos_pol,&p);
-                    }
-                    
-
-                    {
-                        auto input_p = reinterpret_cast<value_type*>(
-                                 b0.overflow*uintptr_t(&cur.l)
-                                +b1.overflow*uintptr_t(&cur.r));
-                        *input_p = b0.overflow*from + b1.overflow*to; 
+                        // b0 : l(from) r(region)
+                        // b1 : l(region) r(to)
+                        
+                        {// decide to which(l or r) the value is loaded 
+                            auto p = reinterpret_cast<value_type*>(
+                                     b0.overflow*uintptr_t(&cur.r)
+                                    +b1.overflow*uintptr_t(&cur.l));
+                            auto pos_pol = b0.overflow*min_pos+b1.overflow*(max_pos-sizeof(value_type));
+                            pref.read_value(pos_pol,&p);
+                        }
+                        
+                        {// decide to which(l or r) input value is assigned
+                            auto input_p = reinterpret_cast<value_type*>(
+                                     b0.overflow*uintptr_t(&cur.l)
+                                    +b1.overflow*uintptr_t(&cur.r));
+                            *input_p = b0.overflow*from + b1.overflow*to; 
+                        }
                     }
 
                     begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
                     end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
                     
-                    printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
-                    printf("l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
-                    fflush(stdout);
+                    l_adj = !b0.overflow*!b0_is_contaied;
+                    r_adj = !b1.overflow*!b1_is_contaied;
                     
-                }else{
                     printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
+                    printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
+                    fflush(stdout);
+                }
+                else{
                     auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
-                    auto l_adj = !b0_is_contaied;
-                    auto r_adj = !b1_is_contaied;
+                    l_adj = !b0_is_contaied;
+                    r_adj = !b1_is_contaied;
                     
                     auto b0_ignore = b0.overflow/*|!b0_is_contaied*/;
                     auto b1_ignore = b1.overflow/*|!b1_is_contaied*/;
                     
-                    // adjust b1_ignore
-                        // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
-                    
-                    // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
-                    // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
-                    auto b0_belongs_to = (b0.nearest_pos-(!b0_is_contaied*sizeof(value_type)))/block_size*block_size; 
-                    auto b1_belongs_to = (b1.nearest_pos-(!b1_is_contaied*sizeof(value_type)))/block_size*block_size; 
-                    b1_ignore =
-                        !(
-                             (b0_ignore&b1_ignore)
-                            &(b0_belongs_to==b1_belongs_to)
-                        );
-                    
-                    
-                    // if both are belongs to the same block, then ignore count should be 1. 
-                    for(auto cur = begin; b0_ignore|(cur < end); /*cur+=block_size*/){
-                        auto value = value_type(0);
-                        auto value_ptr = &value;
-                        printf("begin,end");
-                        pref.read_value(cur,&value_ptr);
-                        printf("(%ld,",l_adj*from+!l_adj*value);
-                        pref.read_value(cur+sizeof(value_type),&value_ptr);
-                        auto adjust_value = (r_adj&(cur+block_size >= end));
-                        printf("%ld)\n",adjust_value*to + !adjust_value*value);
-                        fflush(stdout);
-                        l_adj=false;
-                        cur+=!b0_ignore*block_size;
-                        b0_ignore = false;
-                    }
+                    printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                 }
                 
+                auto block_size = sizeof(value_type)*2;
+                auto b0_ignore = b0.overflow;
+                auto b1_ignore = b1.overflow;
+                
+                // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
+                // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
+                auto b0_belongs_to = (b0.nearest_pos-(!b0_is_contaied*sizeof(value_type)))/block_size*block_size; 
+                auto b1_belongs_to = (b1.nearest_pos-(!b1_is_contaied*sizeof(value_type)))/block_size*block_size; 
+                
+                // adjust b1_ignore
+                    // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
+                b1_ignore =
+                    !(
+                         (b0_ignore&b1_ignore)
+                        &(b0_belongs_to==b1_belongs_to)
+                    );
+                
+                // if both are belongs to the same block, then ignore count should be 1. 
+                for(auto cur = begin; b0_ignore|(cur < end); /*cur+=block_size*/){
+                    auto value = value_type(0);
+                    auto value_ptr = &value;
+                    printf("begin,end");
+                    pref.read_value(cur,&value_ptr);
+                    printf("(%ld,",l_adj*from+!l_adj*value);
+                    pref.read_value(cur+sizeof(value_type),&value_ptr);
+                    auto adjust_value = (r_adj&(cur+block_size >= end));
+                    printf("%ld)\n",adjust_value*to + !adjust_value*value);
+                    fflush(stdout);
+                    l_adj=false;
+                    cur+=!b0_ignore*block_size;
+                    b0_ignore = false;
+                }
+
                 
                 
             }// iterate
