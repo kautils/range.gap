@@ -181,11 +181,11 @@ int main(){
              
             // to
             // contained
-            +((!is_from & b0_nearest_is_former  & (b0.direction >= 0))* (b0.nearest_pos))
-            +((!is_from & !b0_nearest_is_former & (b0.direction <= 0))*  b0.nearest_pos)+(-sizeof(value_type))
+            +((!is_from & b0_nearest_is_former  & (b0.direction >= 0))  * (b0.nearest_pos))
+            +((!is_from & !b0_nearest_is_former & (b0.direction <= 0))) * (b0.nearest_pos-sizeof(value_type))
             // !contained
-            +((!is_from & b0_nearest_is_former  &!(b0.direction >= 0))* (b0.nearest_pos))
-            +((!is_from & !b0_nearest_is_former &!(b0.direction <= 0))*  b0.nearest_pos)+(+sizeof(value_type))
+            +((!is_from & b0_nearest_is_former  &!(b0.direction >= 0))  * (b0.nearest_pos))
+            +((!is_from & !b0_nearest_is_former &!(b0.direction <= 0))) * (b0.nearest_pos+sizeof(value_type))
         );
     };
     // contained or not contained 
@@ -199,24 +199,24 @@ int main(){
         return !(b0_cond_not_contained|b0.overflow);
     };
     
-    auto read_lvalue = [](auto & res,auto & b0,auto & pref){
+    auto read_lvalue = [](auto & value,auto & b0,auto & pref){
         auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
         if(is_even){
-            res = b0.nearest_value;
+            value = b0.nearest_value;
             //pref.read_value(b0.nearest_pos,&ptr);
         }else{
-            auto ptr = &res;
+            auto ptr = &value;
             pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
         }
     };
     
-    auto read_rvalue = [](auto & res,auto & b0,auto & pref){
+    auto read_rvalue = [](auto & value,auto & b0,auto & pref){
         auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
         if(is_even){
-            auto ptr = &res;
+            auto ptr = &value;
             pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
         }else{
-            res = b0.nearest_value;
+            value = b0.nearest_value;
             //pref.read_value(b0.nearest_pos,&ptr);
         }
     };
@@ -230,16 +230,16 @@ int main(){
         auto min_pos = 0;
         auto from = value_type(0);auto to = value_type(0);
         {
-//            from = 0;to = 0; // both ovf(l) expect 0,0 
-//            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
-//            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
-            from = 0;to = 25; // either ovf(l) expect 0 10 
-//            from = 26;to = 34; // either ovf(l) expect 0 10 
-//            from = 0;to = 15; // either ovf(l) expect 0 10   
-//            from = 0;to = 40; // either ovf(l)  
-//            from = 15;to = 2005; // either ovf(u) 
-//            from = 25;to = 2005; // either ovf(u)  
-//            from = 5;to = 890; // either ovf(u)  
+            from = 0;to = 0; // both ovf(l) expect 0,0 
+            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
+            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
+            from = 0;to = 24; // either ovf(l) expect 0 10 
+            from = 26;to = 34; // either ovf(l) expect 0 10 
+            from = 0;to = 15; // either ovf(l) expect 0 10   
+            from = 0;to = 40; // either ovf(l)  
+            from = 15;to = 2005; // either ovf(u) 
+            from = 25;to = 2005; // either ovf(u)  
+            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
@@ -379,25 +379,10 @@ int main(){
                 
                 
                 if(!(ovf_state&kBothOvfSame)){
-                
-                    auto block_size = sizeof(value_type)*2;
-                    
-                    // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
-                    // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
-                    
-                    // adjust b1_ignore
-                        // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
-                    {
-                        if((begin==end) & !b1_is_contaied){
-                            auto value_ptr = &cur.l;
-                            pref.read_value(begin,&value_ptr);
-                            cur.r=to;
-                            printf("++++ virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
-                        }
-                    }
+                    constexpr auto block_size = sizeof(value_type)*2;
                     
                     // if both are belongs to the same block, then ignore count should be 1. 
-                    for(auto cur = begin; /*b0_ignore|*/(cur < end); cur+=block_size){
+                    for(auto cur = begin; cur < end; cur+=block_size){
                         auto value = value_type(0);
                         auto value_ptr = &value;
                         printf("begin,end");
