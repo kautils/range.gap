@@ -108,9 +108,6 @@ int main(){
     };
     // contained or not contained 
     
-    
-    
-    
     auto is_contained = [](auto & b0){
         auto block_size =(sizeof(value_type)*2);
         auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
@@ -140,19 +137,6 @@ int main(){
         }
     };
 
-//    auto calc_ovf_count = [](auto & b0,bool is_from)->int{
-//        // is_from & overflow(f or l)
-//            // ovf(f) : ovf_count+=2
-//            // ovf(l) : ignore
-//        // !is_from & overflow(f or l)
-//            // ovf(f) : ignore 
-//            // ovf(l) : ovf_count+=2
-//        return 
-//             -2*(is_from & b0.overflow & (b0.direction < 0))
-//            +2*(!is_from & b0.overflow & (b0.direction > 0)); 
-//    };
-
-    
     {
         
         auto pref = file_syscall_16b_pref{.fd=fileno(f_ranges)};
@@ -162,11 +146,18 @@ int main(){
         auto min_pos = 0;
         auto from = value_type(0);auto to = value_type(0);
         {
-            from = 0;to = 0; // expect 0,0
-            from = 2000;to = 2005; // expect 2000,2005
-            from = 0;to = 2005; // expect 2000,2005
-            from = 20;to = 30; // expect 20,30
-            from = 20;to = 25; // expect 20,25
+            from = 0;to = 0; // both ovf(l) expect 0,0 
+            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
+            from = 0;to = 2005; // both ovf(differ) expect 2000,2005
+            from = 0;to = 10; // either ovf(l) expect 0 10 
+            
+            
+            
+//            from = 20;to = 30; // expect 20,30
+//            from = 25;to = 47; // expect 20,25
+            
+            
+//            from = 20;to = 25; // expect 20,25
 //            from = 5;to = 15;// expect 5,10
 //            from = 10;to = 20; // expect nothing
 //            from = 20;to = 30; // expect 20,30
@@ -181,7 +172,9 @@ int main(){
         constexpr auto kEitherOvf=8;
         int ovf_state = 0;
         auto begin = offset_type (0),end = offset_type(0);{ // begin , end 
-
+            
+            
+            
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
             
@@ -190,12 +183,6 @@ int main(){
                 if(b1_is_contaied) read_lvalue(to,b1,pref);
             }
 
-            // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
-            auto b0_ignore = b0.overflow|!b0_is_contaied;
-            auto b1_ignore = b1.overflow|!b1_is_contaied;
-            
-            
-            
             auto fsize = pref.size();
             begin = adjust_pos(b0,true,from);
             end   = adjust_pos(b1,false,to);
@@ -255,20 +242,41 @@ int main(){
                     auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
                     auto l_adj = !b0_is_contaied;
                     auto r_adj = !b1_is_contaied;
-                    for(auto cur = begin; cur < end; cur+=block_size){
-                        
+                    
+                    auto b0_ignore = b0.overflow/*|!b0_is_contaied*/;
+                    auto b1_ignore = b1.overflow/*|!b1_is_contaied*/;
+                    
+                    // adjust b1_ignore
+                        // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
+                    
+                    // if contaied then round(b0_np,sizeof(value_type)*2) == round(b1_np,sizeof(value_type)*2)
+                    // if not contaied  round(b0_np-sizeof(vt),sizeof(value_type)*2) == round(b1_np-sizeof(vt),sizeof(value_type)*2)
+                    auto b0_belongs_to = (b0.nearest_pos-(!b0_is_contaied*sizeof(value_type)))/block_size*block_size; 
+                    auto b1_belongs_to = (b1.nearest_pos-(!b1_is_contaied*sizeof(value_type)))/block_size*block_size; 
+                    b1_ignore =
+                        !(
+                             (b0_ignore&b1_ignore)
+                            &(b0_belongs_to==b1_belongs_to)
+                        );
+                    
+                    
+                    
+                    
+                    // if both are belongs to the same block, then ignore count should be 1. 
+                    for(auto cur = begin; b0_ignore|(cur < end); /*cur+=block_size*/){
                         auto value = value_type(0);
                         auto value_ptr = &value;
                         printf("begin,end");
                         pref.read_value(cur,&value_ptr);
                         printf("(%ld,",l_adj*from+!l_adj*value);
                         pref.read_value(cur+sizeof(value_type),&value_ptr);
-                        //auto last_elem = cur+block_size >= end;
                         auto adjust_value = (r_adj&(cur+block_size >= end));
-                        //adjust_value*to + !adjust_value*value;
                         printf("%ld)\n",adjust_value*to + !adjust_value*value);
                         fflush(stdout);
                         l_adj=false;
+                        
+                        cur+=!b0_ignore*block_size;
+                        b0_ignore = false;
                         
                     }
                 }
