@@ -62,6 +62,104 @@ using file_syscall_16b_f_pref= file_syscall_premitive<double>;
 
 #include "kautil/algorithm/btree_search/btree_search.hpp"
 
+
+template<typename preference_t>
+struct gap_iterator{
+
+
+    using value_type = typename preference_t::value_type;
+    using offset_type = typename preference_t::offset_type;
+
+    gap_iterator(preference_t * pref) : pref(pref){}
+    ~gap_iterator(){}
+
+    void initialize(value_type from, value_type to){
+        auto bt = kautil::algorithm::btree_search{pref};
+        auto max_pos = pref->size();
+        auto min_pos = 0;
+        ovf_state = 0;
+
+        auto b0 = bt.search(from,false);
+        auto b1 = bt.search(to,false);
+
+        constexpr auto kBothOvfSame=2;
+        constexpr auto kBothOvfDifferent=4;
+        constexpr auto kEitherOvf=8;
+        
+        auto b0_is_contaied = is_contained(b0);
+        auto b1_is_contaied = is_contained(b1);
+        auto block_size = sizeof(value_type)*2;
+        auto fsize = pref->size();
+        
+        
+        begin_ = adjust_pos(b0,true,from);
+        end_= adjust_pos(b1,false,to);
+
+        {
+            auto both_is_ovf = (b0.overflow&b1.overflow);
+            auto either_is_ovf = (b0.overflow^b1.overflow);
+            auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
+            ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
+            ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
+            ovf_state|=kEitherOvf*either_is_ovf;
+        }
+        
+        
+        auto is_ovf_either_begin = bool(
+              (ovf_state&kBothOvfDifferent)
+            + (ovf_state&kEitherOvf)&b0.overflow
+        ); 
+        
+        auto is_ovf_either_end = bool(
+              (ovf_state&kBothOvfDifferent)
+            + (ovf_state&kEitherOvf)&b1.overflow
+        ); 
+        
+        auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
+        
+        
+        auto is_ovf_adjust_begin = 
+             is_ovf_either_begin
+            |is_ovf_adjust_not_need_itreation;
+        
+        auto is_ovf_adjust_end = 
+             is_ovf_either_end
+            |is_ovf_adjust_not_need_itreation;
+        
+        
+        begin_ = 
+                is_ovf_either_begin*(
+                      min_pos*(ovf_state&kBothOvfDifferent)
+                    + min_pos*(ovf_state&kEitherOvf)&b0.overflow
+                ) 
+                + !(ovf_state&kBothOvfSame); 
+                + !is_ovf_adjust_begin*begin_;
+        
+        end_ =
+                is_ovf_either_end*(
+                      max_pos*(ovf_state&kBothOvfDifferent)
+                    + max_pos*(ovf_state&kEitherOvf)&b1.overflow
+                )
+                + !(ovf_state&kBothOvfSame);
+                + !is_ovf_adjust_end*end_;
+        
+                
+    }
+
+
+
+
+
+    int ovf_state = 0;
+    offset_type begin_ =0;
+    offset_type end_ = 0;
+    preference_t * pref=0;
+
+};
+
+
+
+
 int main(){
     using value_type = uint64_t;
     using offset_type = long;
@@ -118,21 +216,23 @@ int main(){
     
     auto read_lvalue = [](auto & res,auto & b0,auto & pref){
         auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
-        auto ptr = &res;
         if(is_even){
-            pref.read_value(b0.nearest_pos,&ptr);
+            res = b0.nearest_value;
+            //pref.read_value(b0.nearest_pos,&ptr);
         }else{
+            auto ptr = &res;
             pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
         }
     };
     
     auto read_rvalue = [](auto & res,auto & b0,auto & pref){
         auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
-        auto ptr = &res;
         if(is_even){
+            auto ptr = &res;
             pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
         }else{
-            pref.read_value(b0.nearest_pos,&ptr);
+            res = b0.nearest_value;
+            //pref.read_value(b0.nearest_pos,&ptr);
         }
     };
 
@@ -147,7 +247,7 @@ int main(){
         {
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
-            from = 0;to = 2005; // both ovf(differ) expect 2000,2005
+            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
             from = 0;to = 25; // either ovf(l) expect 0 10 
             from = 26;to = 34; // either ovf(l) expect 0 10 
             from = 0;to = 15; // either ovf(l) expect 0 10   
@@ -170,31 +270,12 @@ int main(){
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
             
-            
-//            {// adjust [from|to] when it is contained 
-//                if(b0_is_contaied) read_rvalue(from,b0,pref);
-//                if(b1_is_contaied) read_lvalue(to,b1,pref);
-//            }
 
-            {
-                auto block_size = sizeof(value_type)*2;
-                if(!bool(b0.nearest_pos%block_size)&b0_is_contaied){
-                    b0.nearest_pos+=sizeof(value_type);
-                    auto ptr = &b0.nearest_value;
-                    pref.read_value(b0.nearest_pos,&ptr);
-                }
-                
-                if(bool(b1.nearest_pos%block_size)&b1_is_contaied){
-                    b1.nearest_pos-=sizeof(value_type);
-                    auto ptr = &b1.nearest_value;
-                    pref.read_value(b1.nearest_pos,&ptr);
-                }
-            }
-            
-            
             auto fsize = pref.size();
             begin = adjust_pos(b0,true,from);
             end   = adjust_pos(b1,false,to);
+            
+            
             
             
             {
@@ -205,30 +286,41 @@ int main(){
                 ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
                 ovf_state|=kEitherOvf*either_is_ovf;
             }
+
+            auto is_ovf_either_begin = bool(bool(ovf_state&kEitherOvf)&b0.overflow); 
+            auto is_ovf_either_end = bool(bool(ovf_state&kEitherOvf)&b1.overflow);
+            auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
+            auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
             
-            auto is_adjust_begin = bool(
-                  (ovf_state&kBothOvfDifferent)
-                + (ovf_state&kEitherOvf)&b0.overflow
-            ); 
             
-            auto is_adjust_end = bool(
-                  (ovf_state&kBothOvfDifferent)
-                + (ovf_state&kEitherOvf)&b1.overflow
-            ); 
             
             begin = 
-                    is_adjust_begin*(
-                          min_pos*(ovf_state&kBothOvfDifferent)
-                        + min_pos*(ovf_state&kEitherOvf)&b0.overflow
-                    ) 
-                    +!is_adjust_begin*begin;
+                      is_ovf_different*sizeof(value_type)
+                    +!is_ovf_different*begin;
             
-            end =
-                    is_adjust_end*(
-                          max_pos*(ovf_state&kBothOvfDifferent)
-                        + max_pos*(ovf_state&kEitherOvf)&b1.overflow
-                    )
-                    +!is_adjust_end*end;
+            end = 
+                      is_ovf_different*(max_pos-(sizeof(value_type)*2))
+                    +!is_ovf_different*end;
+            
+            begin*=!is_ovf_adjust_not_need_itreation;
+            end*=!is_ovf_adjust_not_need_itreation;
+            
+//            begin = 
+//                      is_ovf_either_begin*(sizeof(value_type)*((ovf_state&kEitherOvf)&b0.overflow)) 
+//                    +!is_ovf_either_begin*begin;
+//
+//            end =
+//                      is_ovf_either_end*((max_pos-sizeof(value_type))*((ovf_state&kEitherOvf)&b1.overflow))
+//                    +!is_ovf_either_end*end;
+
+            
+//            if(ovf_state&kEitherOvf){
+            if(is_ovf_either_begin|is_ovf_either_end){
+                begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
+                end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
+            }
+            
+
             
             
             {// iterate
@@ -243,11 +335,8 @@ int main(){
                 
                 if(ovf_state&kBothOvfSame){
                     printf("kBothOvfSame\n");fflush(stdout);
-                    begin=end =0;
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
-                    begin = sizeof(value_type);
-                    end = b1.overflow*(max_pos-(sizeof(value_type)*2) );
                     /* todo : express first(from,arr[0]) and last(arr[last],to)*/
                 }else if(ovf_state&kEitherOvf){
                     printf("kEitherOvf\n");fflush(stdout);
@@ -271,8 +360,8 @@ int main(){
                         }
                     }
 
-                    begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
-                    end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
+//                    begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
+//                    end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
                     
                     l_adj = !b0.overflow*!b0_is_contaied;
                     r_adj = !b1.overflow*!b1_is_contaied;
@@ -292,9 +381,12 @@ int main(){
                     printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                 }
                 
+                
+                
+                
+                
                 if(!(ovf_state&kBothOvfSame)){
                 
-                    
                     auto block_size = sizeof(value_type)*2;
                     auto b0_ignore = b0.overflow;
                     auto b1_ignore = b1.overflow;
@@ -320,15 +412,7 @@ int main(){
                             cur.r=to;
                             printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
                         }
-//                        if((begin==end) & !b0_is_contaied){
-//                            printf("!!!check carefully. compare with above block \"if((begin==end) & !b1_is_contaied)\".");
-//                            cur.l=from;
-//                            auto value_ptr = &cur.r;
-//                            pref.read_value(begin,&value_ptr);
-//                            printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
-//                        }
                     }
-                    
                     
                     // if both are belongs to the same block, then ignore count should be 1. 
                     for(auto cur = begin; /*b0_ignore|*/(cur < end); cur+=block_size){
@@ -343,12 +427,27 @@ int main(){
                         fflush(stdout);
                         l_adj=false;
                     }
-
                 }
-                
-                
             }// iterate
         }// begin , end
+        
+        
+        
+//        auto gap_iterator=[](auto from,auto to,auto pref){
+//            auto bt = kautil::algorithm::btree_search{&pref};
+//            auto b0 = bt.search(from,false);
+//            auto b1 = bt.search(to,false);
+//        };
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         
     }
