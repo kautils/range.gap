@@ -128,8 +128,6 @@ struct gap_iterator{
             // is_same
             begin_*=!is_ovf_adjust_not_need_itreation;
             end_*=!is_ovf_adjust_not_need_itreation;
-
-
                 
     }
 
@@ -232,16 +230,16 @@ int main(){
         auto min_pos = 0;
         auto from = value_type(0);auto to = value_type(0);
         {
-            from = 0;to = 0; // both ovf(l) expect 0,0 
-            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
+//            from = 0;to = 0; // both ovf(l) expect 0,0 
+//            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect ?2000,2005 // todo : imcomplete 
-            from = 0;to = 25; // either ovf(l) expect 0 10 
-            from = 26;to = 34; // either ovf(l) expect 0 10 
-            from = 0;to = 15; // either ovf(l) expect 0 10   
-            from = 0;to = 40; // either ovf(l)  
-            from = 15;to = 2005; // either ovf(u) 
-            from = 25;to = 2005; // either ovf(u)  
-            from = 5;to = 890; // either ovf(u)  
+//            from = 0;to = 25; // either ovf(l) expect 0 10 
+//            from = 26;to = 34; // either ovf(l) expect 0 10 
+//            from = 0;to = 15; // either ovf(l) expect 0 10   
+//            from = 0;to = 40; // either ovf(l)  
+//            from = 15;to = 2005; // either ovf(u) 
+//            from = 25;to = 2005; // either ovf(u)  
+//            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
@@ -299,59 +297,88 @@ int main(){
             end*=!is_ovf_adjust_not_need_itreation;
 
             
-            {// iterate
+            auto l_adj = false;
+            auto r_adj = false;
+            l_adj = 
+                      is_ovf_either*(!b0.overflow*!b0_is_contaied)
+                    +!is_ovf_either*l_adj;
+            r_adj = 
+                      is_ovf_either*(!b1.overflow*!b1_is_contaied)
+                    +!is_ovf_either*r_adj;
+            
+            l_adj = 
+                    !ovf_state*!b0_is_contaied
+                    +ovf_state*l_adj;
+            r_adj = 
+                    !ovf_state*!b1_is_contaied
+                    +ovf_state*r_adj;
+            
+            
+            
+            auto lmb_virtual_value = [](
+                    auto from,auto to
+                    ,bool lr 
+                    , auto * pref
+                    ){
                 
                 struct tmp_iterator{
                     value_type l =0;
                     value_type r =0;
                 } cur;
                 
-                auto l_adj = false;
-                auto r_adj = false;
+                auto max_pos = pref->size();
+                auto min_pos = 0;
+                
+                {
+                    // b0 : l(from) r(region)
+                    // b1 : l(region) r(to)
+                    
+                    {// decide to which(l or r) the value is loaded 
+                        auto p = reinterpret_cast<value_type*>(
+                                 lr*uintptr_t(&cur.r)
+                                +!lr*uintptr_t(&cur.l));
+                        auto pos_pol = lr*min_pos+!lr*static_cast<offset_type>(max_pos-sizeof(value_type));
+                        pref->read_value(pos_pol,&p);
+                    }
+                    
+                    {// decide to which(l or r) input value is assigned
+                        auto input_p = reinterpret_cast<value_type*>(
+                                 lr*uintptr_t(&cur.l)
+                                +!lr*uintptr_t(&cur.r));
+                        *input_p = lr*from + !lr*to; 
+                    }
+                    //printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
+                    printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",lr,!lr,cur.l,cur.r);
+                    fflush(stdout);
+                }
+            };
+            
+            
+            {// iterate
+                
+                // add first
+                // add last
+                // add first and last
+                // only one
+                
+                
+                struct tmp_iterator{
+                    value_type l =0;
+                    value_type r =0;
+                } cur;
                 
                 if(ovf_state&kBothOvfSame){
                     printf("kBothOvfSame\n");fflush(stdout);
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
                     /* todo : express first(from,arr[0]) and last(arr[last],to)*/
+                    
+                    lmb_virtual_value(from,to,true,&pref);
+                    lmb_virtual_value(from,to,false,&pref);
+                    
                 }else if(ovf_state&kEitherOvf){
                     printf("kEitherOvf\n");fflush(stdout);
-                    {
-                        // b0 : l(from) r(region)
-                        // b1 : l(region) r(to)
-                        
-                        {// decide to which(l or r) the value is loaded 
-                            auto p = reinterpret_cast<value_type*>(
-                                     b0.overflow*uintptr_t(&cur.r)
-                                    +b1.overflow*uintptr_t(&cur.l));
-                            auto pos_pol = b0.overflow*min_pos+b1.overflow*(max_pos-sizeof(value_type));
-                            pref.read_value(pos_pol,&p);
-                        }
-                        
-                        {// decide to which(l or r) input value is assigned
-                            auto input_p = reinterpret_cast<value_type*>(
-                                     b0.overflow*uintptr_t(&cur.l)
-                                    +b1.overflow*uintptr_t(&cur.r));
-                            *input_p = b0.overflow*from + b1.overflow*to; 
-                        }
-                    }
-                    
-                    l_adj = !b0.overflow*!b0_is_contaied;
-                    r_adj = !b1.overflow*!b1_is_contaied;
-                    
-                    printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
-                    printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
-                    fflush(stdout);
-                }
-                else{
-                    auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
-                    l_adj = !b0_is_contaied;
-                    r_adj = !b1_is_contaied;
-                    
-                    auto b0_ignore = b0.overflow;
-                    auto b1_ignore = b1.overflow;
-                    
-                    printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
+                    lmb_virtual_value(from,to,b0.overflow,&pref);
                 }
                 
                 
