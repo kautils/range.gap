@@ -235,11 +235,11 @@ int main(){
             from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
             from = 0;to = 24; // either ovf(l) expect 0 10 
             from = 26;to = 34; // either ovf(l) expect 0 10 
-            from = 0;to = 15; // either ovf(l) expect 0 10   
-            from = 0;to = 40; // either ovf(l)  
-            from = 15;to = 2005; // either ovf(u) 
-            from = 25;to = 2005; // either ovf(u)  
-            from = 5;to = 890; // either ovf(u)  
+//            from = 0;to = 15; // either ovf(l) expect 0 10   
+//            from = 0;to = 40; // either ovf(l)  
+//            from = 15;to = 2005; // either ovf(u) 
+//            from = 25;to = 2005; // either ovf(u)  
+//            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
@@ -296,6 +296,7 @@ int main(){
             begin*=!is_ovf_adjust_not_need_itreation;
             end*=!is_ovf_adjust_not_need_itreation;
 
+            
             
             auto l_adj = false;
             auto r_adj = false;
@@ -385,9 +386,8 @@ int main(){
                     for(auto cur = begin; cur < end; cur+=block_size){
                         pref.read_value(cur,&(value_ptr = &l));
                         pref.read_value(cur+sizeof(value_type),&(value_ptr = &r));
-                        // auto adjust_r = (r_adj&(cur+block_size >= end));
-//                        printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,adjust_r*to+!adjust_r*r);
-                        printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,r_adj*to+!r_adj*r);fflush(stdout);
+                        auto adjust_r = (r_adj&(cur+block_size >= end));
+                        printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,adjust_r*to+!adjust_r*r);
                         l_adj=false;
                     }
                 }
