@@ -149,18 +149,11 @@ int main(){
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect 2000,2005
-            from = 0;to = 10; // either ovf(l) expect 0 10 
-            
-            
-            
-//            from = 20;to = 30; // expect 20,30
-//            from = 25;to = 47; // expect 20,25
-            
-            
-//            from = 20;to = 25; // expect 20,25
-//            from = 5;to = 15;// expect 5,10
-//            from = 10;to = 20; // expect nothing
-//            from = 20;to = 30; // expect 20,30
+            from = 0;to = 25; // either ovf(l) expect 0 10 
+            from = 0;to = 15; // either ovf(l) expect 0 10 
+//            from = 15;to = 2005; // either ovf(u) 
+//            from = 25;to = 2005; // either ovf(u)  
+            printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
         auto b0 = bt.search(from,false);
@@ -172,8 +165,6 @@ int main(){
         constexpr auto kEitherOvf=8;
         int ovf_state = 0;
         auto begin = offset_type (0),end = offset_type(0);{ // begin , end 
-            
-            
             
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
@@ -225,20 +216,43 @@ int main(){
             
             printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
             
-//            auto ovf_cnt = int(0);{
-//                ovf_cnt+=calc_ovf_count(b0,true);
-//                ovf_cnt+=calc_ovf_count(b1,false);
-//                printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
-//            }// ovf_cnt
-            
-            
             {// iterate
+                
+                struct tmp_iterator{
+                    value_type l =0;
+                    value_type r =0;
+                } cur;
+                
                 
                 if(ovf_state&kBothOvfSame){
                     printf("kBothOvfSame\n");fflush(stdout);
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
+                }else if(ovf_state&kEitherOvf){
+                    printf("kEitherOvf\n");fflush(stdout);
+                    auto v = value_type(0);
+                    {
+                        auto p = reinterpret_cast<value_type*>(
+                                 b0.overflow*uintptr_t(&cur.r)
+                                +b1.overflow*uintptr_t(&cur.l));
+                        auto pos_pol = b0.overflow*min_pos+b1.overflow*(max_pos-sizeof(value_type));
+                        pref.read_value(pos_pol,&p);
+                    }
+                    
+
+                    {
+                        auto input_p = reinterpret_cast<value_type*>(
+                                 b0.overflow*uintptr_t(&cur.l)
+                                +b1.overflow*uintptr_t(&cur.r));
+                        *input_p = b0.overflow*from + b1.overflow*to; 
+                    }
+
+                    
+                    printf("l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
+                    fflush(stdout);
+                    
                 }else{
+                    
                     auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
                     auto l_adj = !b0_is_contaied;
                     auto r_adj = !b1_is_contaied;
@@ -260,8 +274,6 @@ int main(){
                         );
                     
                     
-                    
-                    
                     // if both are belongs to the same block, then ignore count should be 1. 
                     for(auto cur = begin; b0_ignore|(cur < end); /*cur+=block_size*/){
                         auto value = value_type(0);
@@ -274,10 +286,8 @@ int main(){
                         printf("%ld)\n",adjust_value*to + !adjust_value*value);
                         fflush(stdout);
                         l_adj=false;
-                        
                         cur+=!b0_ignore*block_size;
                         b0_ignore = false;
-                        
                     }
                 }
                 
