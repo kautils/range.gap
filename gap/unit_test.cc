@@ -151,6 +151,7 @@ int main(){
             from = 0;to = 2005; // both ovf(differ) expect 2000,2005
             from = 0;to = 25; // either ovf(l) expect 0 10 
             from = 0;to = 15; // either ovf(l) expect 0 10 
+            from = 0;to = 40; // either ovf(l) expect 0 10 
 //            from = 15;to = 2005; // either ovf(u) 
 //            from = 25;to = 2005; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
@@ -214,7 +215,6 @@ int main(){
             
             
             
-            printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
             
             {// iterate
                 
@@ -229,6 +229,7 @@ int main(){
                 }else if(ovf_state&kBothOvfDifferent){
                     printf("kBothOvfDifferent\n");fflush(stdout);
                 }else if(ovf_state&kEitherOvf){
+                    
                     printf("kEitherOvf\n");fflush(stdout);
                     auto v = value_type(0);
                     {
@@ -247,12 +248,15 @@ int main(){
                         *input_p = b0.overflow*from + b1.overflow*to; 
                     }
 
+                    begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
+                    end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
                     
+                    printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                     printf("l,r{%d,%d} pole(%lld,%lld)\n",b0.overflow,b1.overflow,cur.l,cur.r);
                     fflush(stdout);
                     
                 }else{
-                    
+                    printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                     auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
                     auto l_adj = !b0_is_contaied;
                     auto r_adj = !b1_is_contaied;
@@ -290,6 +294,7 @@ int main(){
                         b0_ignore = false;
                     }
                 }
+                
                 
                 
             }// iterate
