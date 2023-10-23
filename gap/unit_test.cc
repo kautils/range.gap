@@ -82,22 +82,6 @@ int main(){
         auto fd = fileno(f_ranges);
         printf("file size : %ld\n",lseek(fd,0,SEEK_END)-lseek(fd,0,SEEK_SET));
     }
-
-    
-//    auto adjust_pos = [](auto & b0,bool is_from) -> offset_type {
-//        auto block_size =(sizeof(value_type)*2);
-//        auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
-//        return static_cast<offset_type>(
-//            !(b0.overflow|b0.nan)*(
-//                 ((is_from &  b0_nearest_is_former &(b0.direction >= 0)) * (b0.nearest_pos+(-sizeof(value_type))))
-//                +((is_from &  !b0_nearest_is_former &(b0.direction <= 0)) *  b0.nearest_pos)
-//                +((!is_from & b0_nearest_is_former &(b0.direction >= 0))* (b0.nearest_pos+(+sizeof(value_type))))
-//                +((!is_from & !b0_nearest_is_former &(b0.direction <= 0))*  b0.nearest_pos)
-//            )
-//        );
-//    };
-    // contained or not contained 
-    
     
     
     auto adjust_pos = [](auto & b0,bool is_from,auto const& current_value) -> offset_type {
@@ -179,17 +163,23 @@ int main(){
         auto from = value_type(0);auto to = value_type(0);
         {
             from = 0;to = 0; // expect 0,0
-            from = 0;to = 5; // expect 0,5
             from = 2000;to = 2005; // expect 2000,2005
-            from = 5;to = 15;// expect 5,10
-            from = 10;to = 20; // expect nothing
+            from = 0;to = 2005; // expect 2000,2005
             from = 20;to = 30; // expect 20,30
+            from = 25;to = 30; // expect 25,30
+//            from = 5;to = 15;// expect 5,10
+//            from = 10;to = 20; // expect nothing
+//            from = 20;to = 30; // expect 20,30
         }
         
         auto b0 = bt.search(from,false);
         auto b1 = bt.search(to,false);
         
         
+        constexpr auto kBothOvfSame=2;
+        constexpr auto kBothOvfDifferent=4;
+        constexpr auto kEitherOvf=8;
+        int ovf_state = 0;
         auto begin = offset_type (0),end = offset_type(0);{ // begin , end 
 
             auto b0_is_contaied = is_contained(b0);
@@ -198,20 +188,15 @@ int main(){
             if(b0_is_contaied) read_rvalue(from,b0,pref);
             if(b1_is_contaied) read_lvalue(to,b1,pref);
             
-            
             auto fsize = pref.size();
             begin = adjust_pos(b0,true,from);
             end   = adjust_pos(b1,false,to);
             
             
-            int ovf_state = 0;
-            constexpr auto kBothOvfSame=2;
-            constexpr auto kBothOvfDifferent=4;
-            constexpr auto kEitherOvf=8;
             {
                 auto both_is_ovf = (b0.overflow&b1.overflow);
                 auto either_is_ovf = (b0.overflow^b1.overflow);
-                auto both_is_the_same=(b0.nearest_pos & b1.nearest_pos);
+                auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
                 ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
                 ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
                 ovf_state|=kEitherOvf*either_is_ovf;
@@ -240,41 +225,45 @@ int main(){
                         + max_pos*(ovf_state&kEitherOvf)&b1.overflow
                     )
                     +!adjust_end*end;
-                    
             
-            
-            // case only one range, use from,to as is 
-            ovf_state&kBothOvfSame; 
             
             
             printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
+            
+            auto ovf_cnt = int(0);{
+                ovf_cnt+=calc_ovf_count(b0,true);
+                ovf_cnt+=calc_ovf_count(b1,false);
+                printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
+            }// ovf_cnt
+            
+            
+            {// iterate
+                
+                if(ovf_state&kBothOvfSame){
+                    printf("kBothOvfSame\n");fflush(stdout);
+                }else if(ovf_state&kBothOvfDifferent){
+                    printf("kBothOvfDifferent\n");fflush(stdout);
+                }else{
+                    auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
+                    auto l_adj = !b0_is_contaied;
+                    auto r_adj = !b1_is_contaied;
+                    for(auto cur = begin; cur < end; cur+=block_size){
+                        auto value = value_type(0);
+                        auto value_ptr = &value;
+                        printf("begin,end");
+                        pref.read_value(cur,&value_ptr);
+                        printf("(%ld,",l_adj*from+!l_adj*value);
+                        pref.read_value(cur+sizeof(value_type),&value_ptr);
+                        printf("%ld)\n",value);
+                        fflush(stdout);
+                        l_adj=false;
+                    }
+                }
+                
+                
+            }// iterate
         }// begin , end
         
-        auto ovf_cnt = int(0);{
-            ovf_cnt+=calc_ovf_count(b0,true);
-            ovf_cnt+=calc_ovf_count(b1,false);
-            printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
-        }// ovf_cnt
-        
-        
-        {// iterate
-            auto block_size = static_cast<offset_type>((sizeof(value_type)*2));
-            if(ovf_cnt < 0){
-                printf("ovf(l) begin,end(%ld,%ld)\n",from,to);
-            }
-            for(auto cur = begin; cur < end; cur+=block_size){
-                auto value = value_type(0);
-                auto value_ptr = &value;
-                printf("begin,end");
-                pref.read_value(cur,&value_ptr);
-                printf("(%ld,",value);
-                pref.read_value(cur+sizeof(value_type),&value_ptr);
-                printf("%ld)\n",value);
-                fflush(stdout);
-            }
-            if(ovf_cnt > 0)printf("ovf(u) begin,end(%ld,%ld)\n",from,to);
-            
-        }// iterate
         
     }
     
