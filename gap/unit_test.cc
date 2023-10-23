@@ -140,17 +140,17 @@ int main(){
         }
     };
 
-    auto calc_ovf_count = [](auto & b0,bool is_from)->int{
-        // is_from & overflow(f or l)
-            // ovf(f) : ovf_count+=2
-            // ovf(l) : ignore
-        // !is_from & overflow(f or l)
-            // ovf(f) : ignore 
-            // ovf(l) : ovf_count+=2
-        return 
-             -2*(is_from & b0.overflow & (b0.direction < 0))
-            +2*(!is_from & b0.overflow & (b0.direction > 0)); 
-    };
+//    auto calc_ovf_count = [](auto & b0,bool is_from)->int{
+//        // is_from & overflow(f or l)
+//            // ovf(f) : ovf_count+=2
+//            // ovf(l) : ignore
+//        // !is_from & overflow(f or l)
+//            // ovf(f) : ignore 
+//            // ovf(l) : ovf_count+=2
+//        return 
+//             -2*(is_from & b0.overflow & (b0.direction < 0))
+//            +2*(!is_from & b0.overflow & (b0.direction > 0)); 
+//    };
 
     
     {
@@ -166,7 +166,7 @@ int main(){
             from = 2000;to = 2005; // expect 2000,2005
             from = 0;to = 2005; // expect 2000,2005
             from = 20;to = 30; // expect 20,30
-            from = 25;to = 30; // expect 25,30
+            from = 20;to = 25; // expect 20,25
 //            from = 5;to = 15;// expect 5,10
 //            from = 10;to = 20; // expect nothing
 //            from = 20;to = 30; // expect 20,30
@@ -185,8 +185,16 @@ int main(){
             auto b0_is_contaied = is_contained(b0);
             auto b1_is_contaied = is_contained(b1);
             
-            if(b0_is_contaied) read_rvalue(from,b0,pref);
-            if(b1_is_contaied) read_lvalue(to,b1,pref);
+            {// adjust [from|to] when it is contained 
+                if(b0_is_contaied) read_rvalue(from,b0,pref);
+                if(b1_is_contaied) read_lvalue(to,b1,pref);
+            }
+
+            // the condition under which counter is ignored onece in a foreach (the condition of two times ignore is not concern).   
+            auto b0_ignore = b0.overflow|!b0_is_contaied;
+            auto b1_ignore = b1.overflow|!b1_is_contaied;
+            
+            
             
             auto fsize = pref.size();
             begin = adjust_pos(b0,true,from);
@@ -230,11 +238,11 @@ int main(){
             
             printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
             
-            auto ovf_cnt = int(0);{
-                ovf_cnt+=calc_ovf_count(b0,true);
-                ovf_cnt+=calc_ovf_count(b1,false);
-                printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
-            }// ovf_cnt
+//            auto ovf_cnt = int(0);{
+//                ovf_cnt+=calc_ovf_count(b0,true);
+//                ovf_cnt+=calc_ovf_count(b1,false);
+//                printf("ovf_cnt : %d\n",ovf_cnt); fflush(stdout);
+//            }// ovf_cnt
             
             
             {// iterate
@@ -248,15 +256,20 @@ int main(){
                     auto l_adj = !b0_is_contaied;
                     auto r_adj = !b1_is_contaied;
                     for(auto cur = begin; cur < end; cur+=block_size){
+                        
                         auto value = value_type(0);
                         auto value_ptr = &value;
                         printf("begin,end");
                         pref.read_value(cur,&value_ptr);
                         printf("(%ld,",l_adj*from+!l_adj*value);
                         pref.read_value(cur+sizeof(value_type),&value_ptr);
-                        printf("%ld)\n",value);
+                        //auto last_elem = cur+block_size >= end;
+                        auto adjust_value = (r_adj&(cur+block_size >= end));
+                        //adjust_value*to + !adjust_value*value;
+                        printf("%ld)\n",adjust_value*to + !adjust_value*value);
                         fflush(stdout);
                         l_adj=false;
+                        
                     }
                 }
                 
