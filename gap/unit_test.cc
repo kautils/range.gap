@@ -276,8 +276,6 @@ int main(){
             end   = adjust_pos(b1,false,to);
             
             
-            
-            
             {
                 auto both_is_ovf = (b0.overflow&b1.overflow);
                 auto either_is_ovf = (b0.overflow^b1.overflow);
@@ -287,13 +285,12 @@ int main(){
                 ovf_state|=kEitherOvf*either_is_ovf;
             }
 
-            auto is_ovf_either_begin = bool(bool(ovf_state&kEitherOvf)&b0.overflow); 
-            auto is_ovf_either_end = bool(bool(ovf_state&kEitherOvf)&b1.overflow);
+            auto is_ovf_either = bool(ovf_state&kEitherOvf); 
             auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
             auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
             
             
-            
+            //is_ovf_different
             begin = 
                       is_ovf_different*sizeof(value_type)
                     +!is_ovf_different*begin;
@@ -302,26 +299,18 @@ int main(){
                       is_ovf_different*(max_pos-(sizeof(value_type)*2))
                     +!is_ovf_different*end;
             
+            //is_ovf_either_begin
+            begin = 
+                      is_ovf_either*(!b0.overflow*begin +b0.overflow*sizeof(value_type))
+                    +!is_ovf_either*begin;
+            end = 
+                     is_ovf_either*(!b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type)))
+                   +!is_ovf_either*end;
+            
+            // is_same
             begin*=!is_ovf_adjust_not_need_itreation;
             end*=!is_ovf_adjust_not_need_itreation;
-            
-//            begin = 
-//                      is_ovf_either_begin*(sizeof(value_type)*((ovf_state&kEitherOvf)&b0.overflow)) 
-//                    +!is_ovf_either_begin*begin;
-//
-//            end =
-//                      is_ovf_either_end*((max_pos-sizeof(value_type))*((ovf_state&kEitherOvf)&b1.overflow))
-//                    +!is_ovf_either_end*end;
 
-            
-//            if(ovf_state&kEitherOvf){
-            if(is_ovf_either_begin|is_ovf_either_end){
-                begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
-                end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
-            }
-            
-
-            
             
             {// iterate
                 
@@ -359,9 +348,6 @@ int main(){
                             *input_p = b0.overflow*from + b1.overflow*to; 
                         }
                     }
-
-//                    begin = !b0.overflow*begin + b0.overflow*sizeof(value_type);
-//                    end = !b1.overflow*end + b1.overflow*(max_pos-sizeof(value_type));
                     
                     l_adj = !b0.overflow*!b0_is_contaied;
                     r_adj = !b1.overflow*!b1_is_contaied;
@@ -375,13 +361,11 @@ int main(){
                     l_adj = !b0_is_contaied;
                     r_adj = !b1_is_contaied;
                     
-                    auto b0_ignore = b0.overflow/*|!b0_is_contaied*/;
-                    auto b1_ignore = b1.overflow/*|!b1_is_contaied*/;
+                    auto b0_ignore = b0.overflow;
+                    auto b1_ignore = b1.overflow;
                     
                     printf("begin,end : %ld,%ld\n",begin,end); fflush(stdout);
                 }
-                
-                
                 
                 
                 
