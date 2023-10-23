@@ -386,7 +386,7 @@ int main(){
                     for(auto cur = begin; cur < end; cur+=block_size){
                         pref.read_value(cur,&(value_ptr = &l));
                         pref.read_value(cur+sizeof(value_type),&(value_ptr = &r));
-                        auto adjust_r = (r_adj&(cur+block_size >= end));
+                        auto adjust_r = (r_adj&(cur+block_size >= end)); // add condition to detect last one
                         printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,adjust_r*to+!adjust_r*r);
                         l_adj=false;
                     }
