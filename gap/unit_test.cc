@@ -88,25 +88,26 @@ struct gap{
     gap(preference_t * pref) : pref(pref){}
     ~gap(){}
 
+    static constexpr auto kBothOvfSame=2;
+    static constexpr auto kBothOvfDifferent=4;
+    static constexpr auto kEitherOvfLeft=8;
+    static constexpr auto kEitherOvfRight=16;
+    static constexpr auto kBlockSize =(sizeof(value_type)*2);
+    
     void initialize(value_type __from, value_type __to){
         
-        // these are not member because i wannaed hide them.
-        constexpr auto kBothOvfSame=2;
-        constexpr auto kBothOvfDifferent=4;
-        constexpr auto kEitherOvf=8;
         
         auto is_contained = [](auto & b0){
-            auto block_size =(sizeof(value_type)*2);
-            auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+            auto b0_nearest_is_former = !bool(b0.nearest_pos % kBlockSize);
             auto b0_cond_not_contained = 
                      (b0_nearest_is_former&(b0.direction < 0))
                     |(!b0_nearest_is_former&(b0.direction > 0));
             return !(b0_cond_not_contained|b0.overflow);
         };
     
+        
         auto adjust_pos = [](auto & b0,bool is_from,auto const& current_value) -> offset_type {
-        auto block_size =(sizeof(value_type)*2);
-        auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+            auto b0_nearest_is_former = !bool(b0.nearest_pos % kBlockSize);
             return static_cast<offset_type>(
                 
                 //from
@@ -141,34 +142,31 @@ struct gap{
 
         auto b0_is_contaied = is_contained(b0);
         auto b1_is_contaied = is_contained(b1);
-        auto block_size = sizeof(value_type)*2;
         auto fsize = pref->size();
         
         
         begin_ = adjust_pos(b0,true,from);
         end_= adjust_pos(b1,false,to);
+        
+        auto is_ovf_either = (b0.overflow^b1.overflow);
+        auto is_ovf_both_same= (b0.overflow&b1.overflow)&(b0.nearest_pos == b1.nearest_pos);
+        auto is_ovf_both_different = (b0.overflow&b1.overflow)&!is_ovf_both_same;
         {
-            auto both_is_ovf = (b0.overflow&b1.overflow);
-            auto either_is_ovf = (b0.overflow^b1.overflow);
-            auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
-            ovf_state&=kBothOvfSame*(both_is_ovf&both_is_the_same);
-            ovf_state&=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
-            ovf_state&=kEitherOvf*either_is_ovf;
+            ovf_state=
+                  kBothOvfSame*is_ovf_both_same
+                 +kBothOvfDifferent*is_ovf_both_different
+                 +kEitherOvfLeft *(is_ovf_either*b0.overflow)
+                 +kEitherOvfRight*(is_ovf_either*b1.overflow);
         }
 
-        auto is_ovf_either = bool(ovf_state&kEitherOvf); 
-        auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
-        auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
-        
-        
-        //is_ovf_different
+        //is_ovf_both_different
         begin_ = 
-                  is_ovf_different*sizeof(value_type)
-                +!is_ovf_different*begin_;
+                  is_ovf_both_different*sizeof(value_type)
+                +!is_ovf_both_different*begin_;
         
         end_ = 
-                  is_ovf_different*(max_pos-(sizeof(value_type)*2))
-                +!is_ovf_different*end_;
+                  is_ovf_both_different*(max_pos-(kBlockSize))
+                +!is_ovf_both_different*end_;
         
         //is_ovf_either_begin
         begin_ = 
@@ -179,8 +177,8 @@ struct gap{
                +!is_ovf_either*end_;
         
         // is_same
-        begin_*=!is_ovf_adjust_not_need_itreation;
-        end_*=!is_ovf_adjust_not_need_itreation;
+        begin_*=!is_ovf_both_same;
+        end_*=!is_ovf_both_same;
             
     
         l_adj = false;
@@ -201,11 +199,7 @@ struct gap{
                 +ovf_state*r_adj;
     }
     
-    struct current{
-        value_type l =0;
-        value_type r =0;
-    }; 
-    
+    struct current{ value_type l =0;value_type r =0; }; 
     self_type begin(){ 
         auto res = *this; 
         res.cur = begin_;
@@ -218,18 +212,58 @@ struct gap{
         return res;
     }
     self_type & operator++(){ 
+        
+    
+        auto lmb_virtual_value = [](auto from,auto to,bool lr, auto * pref){
+            auto cur = current{};
+            auto max_pos = pref->size();
+            auto min_pos = 0;
+            {
+                // b0 : l(from) r(region)
+                // b1 : l(region) r(to)
+                {// decide to which(l or r) the value is loaded 
+                    auto p = reinterpret_cast<value_type*>(
+                             lr*uintptr_t(&cur.r)
+                            +!lr*uintptr_t(&cur.l));
+                    auto pos_pol = lr*min_pos+!lr*static_cast<offset_type>(max_pos-sizeof(value_type));
+                    pref->read_value(pos_pol,&p);
+                }
+                
+                {// decide to which(l or r) input value is assigned
+                    auto input_p = reinterpret_cast<value_type*>(
+                             lr*uintptr_t(&cur.l)
+                            +!lr*uintptr_t(&cur.r));
+                    *input_p = lr*from + !lr*to; 
+                }
+//                printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",lr,!lr,cur.l,cur.r);
+//                fflush(stdout);
+            }
+        };
+        
+//        if(ovf_state&kBothOvfSame){
+//            //printf("kBothOvfSame\n");fflush(stdout);
+//        }else if(ovf_state&kBothOvfDifferent){
+////            printf("kBothOvfDifferent\n");fflush(stdout);
+//            lmb_virtual_value(from,to,true,pref);
+//            lmb_virtual_value(from,to,false,pref);
+//        }else if(ovf_state&kEitherOvf){
+////            printf("kEitherOvf\n");fflush(stdout);
+////            lmb_virtual_value(from,to,b0.overflow,&pref);
+//        }
+        
         // if ovf b0 & first
         // if ovf b1 & last
         // then ignore once
-        cur += sizeof(value_type)*2;
+        cur += kBlockSize;
         return *this; 
     }
     current operator*() { 
+//        constexpr auto kBlockSize =(sizeof(value_type)*2);
         auto res=current{};
         auto value_ptr = (value_type*) 0;
         pref->read_value(cur,&(value_ptr = &res.l));
         pref->read_value(cur+sizeof(value_type),&(value_ptr = &res.r));
-        auto adjust_r = (r_adj&(cur+(sizeof(value_type)*2) >= end_)); // add condition to detect last one
+        auto adjust_r = (r_adj&(cur+(kBlockSize) >= end_)); // add condition to detect last one
         l_adj=false; // only first time is concerned if it is true
         return res;
     }
@@ -375,25 +409,25 @@ int main(){
             {
                 auto both_is_ovf = (b0.overflow&b1.overflow);
                 auto either_is_ovf = (b0.overflow^b1.overflow);
-                auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
-                ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
-                ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
+                auto is_ovf_both_same=(b0.nearest_pos == b1.nearest_pos);
+                ovf_state|=kBothOvfSame*(both_is_ovf&is_ovf_both_same);
+                ovf_state|=kBothOvfDifferent*(both_is_ovf&!is_ovf_both_same);
                 ovf_state|=kEitherOvf*either_is_ovf;
             }
 
             auto is_ovf_either = bool(ovf_state&kEitherOvf); 
-            auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
+            auto is_ovf_both_different = bool(ovf_state&kBothOvfDifferent);
             auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
             
             
-            //is_ovf_different
+            //is_ovf_both_different
             begin = 
-                      is_ovf_different*sizeof(value_type)
-                    +!is_ovf_different*begin;
+                      is_ovf_both_different*sizeof(value_type)
+                    +!is_ovf_both_different*begin;
             
             end = 
-                      is_ovf_different*(max_pos-(sizeof(value_type)*2))
-                    +!is_ovf_different*end;
+                      is_ovf_both_different*(max_pos-(sizeof(value_type)*2))
+                    +!is_ovf_both_different*end;
             
             //is_ovf_either_begin
             begin = 
