@@ -3,6 +3,10 @@
 
 #include "kautil/algorithm/btree_search/btree_search.hpp"
 
+
+template<typename preference_t>
+struct gap_iterator;
+
 template<typename preference_t>
 struct gap{
 
@@ -100,55 +104,72 @@ struct gap{
         end_*=!is_ovf_both_same;
             
     
-        l_adj = false;
-        r_adj = false;
-    
-        l_adj = 
-                  is_ovf_either*(!b0.overflow*!b0_is_contaied)
-                +!is_ovf_either*l_adj;
-        r_adj = 
-                  is_ovf_either*(!b1.overflow*!b1_is_contaied)
-                +!is_ovf_either*r_adj;
         
-        l_adj = 
-                !ovf_state*!b0_is_contaied
-                +ovf_state*l_adj;
-        r_adj = 
-                !ovf_state*!b1_is_contaied
-                +ovf_state*r_adj;
-        virtual_end_f=false;
     }
+    gap_iterator<preference_t> iterator();
+    
+private:
+    
+    static constexpr int kBothOvfSame=2;
+    static constexpr int kEitherOvfLeft=4;
+    static constexpr int kEitherOvfRight=8;
+    static constexpr offset_type kBlockSize =sizeof(value_type)*2;
+    
+    int ovf_state = 0; // 0 : nothing ovf, 2 : ovf both,same,  4 : ovf both,different, 8 : ovf either
+    offset_type begin_ =0;
+    offset_type end_ = 0;
+    value_type from=0;
+    value_type to=0;
+    preference_t * pref=0;
+    friend struct gap_iterator<preference_t>;
+};
+
+    
+
+
+template<typename preference_t>
+struct gap_iterator{
+    
+    using self_type = gap_iterator;
+    using value_type = typename preference_t::value_type;
+    using offset_type = typename preference_t::offset_type;
+
+    gap_iterator(gap<preference_t> * p):p(p){}
     
     struct current{ value_type l =0;value_type r =0; }; 
     self_type begin(){ 
         auto res = *this; 
-        res.cur = begin_;
+        res.cur = p->begin_;
+        res.ovf_state=p->ovf_state;
+        res.virtual_begin_f = (res.cur==p->begin_)*bool(res.ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
+        res.virtual_end_f = ((res.cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
         return res;
     }
     
     self_type end(){ 
         auto res = *this; 
-        res.cur = end_;
+        res.cur = p->end_;
+        res.ovf_state=p->ovf_state;
         return res;
     }
-    
+
     self_type & operator++(){ 
-        virtual_begin_f = (cur==begin_)*bool(ovf_state&kEitherOvfLeft); // need not to be member
-        virtual_end_f = ((cur+kBlockSize)>=end_)*bool(ovf_state&kEitherOvfRight); 
+        virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
         auto cond_velem = virtual_begin_f | virtual_end_f;
         ovf_state = 
                   // if(cond_velem_beg)
-                  virtual_begin_f*(ovf_state^kEitherOvfLeft) 
+                  virtual_begin_f*(ovf_state^gap<preference_t>::kEitherOvfLeft) 
                 +!virtual_begin_f*(
                   //else if(cond_velem_end)
-                      virtual_end_f*(ovf_state^kEitherOvfRight)
+                      virtual_end_f*(ovf_state^gap<preference_t>::kEitherOvfRight)
                     +!virtual_end_f*(ovf_state)
                 );
-        cur += (!cond_velem*kBlockSize);
+        cur += (!cond_velem*gap<preference_t>::kBlockSize);
+        virtual_begin_f = (cur==p->begin_)*bool(ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
         return *this; 
     }
+    
     current operator*() { 
-        
         auto lmb_virtual_value = [](auto from,auto to,bool lr, auto * pref)->current{
             auto cur = current{};
             auto max_pos = pref->size();
@@ -177,27 +198,30 @@ struct gap{
         auto lmb_real_value = [](auto * m,auto * pref) -> current{
             auto res=current{};
             auto value_ptr = (value_type*) 0;
+            auto p = m->p;
             
             pref->read_value(m->cur,&(value_ptr = &res.l));
             pref->read_value(m->cur+sizeof(value_type),&(value_ptr = &res.r));
-            auto adjust_r = (m->r_adj&(m->cur+(kBlockSize) >= m->end_)); // add condition to detect last one
-            
+//            auto adjust_r = (m->r_adj&(m->cur+(gap<preference_t>::kBlockSize) >= p->end_)); // add condition to detect last one
+            auto adjust_r = (m->virtual_end_f&(m->cur+(gap<preference_t>::kBlockSize) >= p->end_)); // add condition to detect last one
             // may not be efficient. 
             res.l=
-                      m->l_adj*m->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
-                    +!m->l_adj*res.l;
+//                      m->l_adj*p->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
+//                    +!m->l_adj*res.l;
+                      m->virtual_begin_f*p->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
+                    +!m->virtual_begin_f*res.l;
             res.r=
-                      adjust_r*m->to   // 1) same as 0) but this should occure the last iteration.
+                      adjust_r*p->to   // 1) same as 0) but this should occure the last iteration.
                     +!adjust_r*res.r;
-            m->l_adj=false; // only first time is concerned if it is true
+//            m->l_adj=false; // only first time is concerned if it is true
             return res;
         };
 
         {
             if(virtual_begin_f | virtual_end_f){
-                return lmb_virtual_value(from,to,virtual_begin_f,pref);
+                return lmb_virtual_value(p->from,p->to,virtual_begin_f,p->pref);
             }else{
-                return lmb_real_value(this,pref);
+                return lmb_real_value(this,p->pref);
             }
         }
     }
@@ -205,29 +229,19 @@ struct gap{
     bool operator!=(self_type & r){ return (cur != r.cur) &(cur != r.cur+sizeof(value_type)); }
     
 private:
-    
-    static constexpr int kBothOvfSame=2;
-    static constexpr int kEitherOvfLeft=4;
-    static constexpr int kEitherOvfRight=8;
-    static constexpr offset_type kBlockSize =sizeof(value_type)*2;
-    
     bool virtual_end_f = false; // this member is compromise. i could not express the detection of last elem without this flag.  
     bool virtual_begin_f = false; 
-    bool l_adj = false;
-    bool r_adj = false;
-
     int ovf_state = 0; // 0 : nothing ovf, 2 : ovf both,same,  4 : ovf both,different, 8 : ovf either
     offset_type cur = 0;
-    offset_type begin_ =0;
-    offset_type end_ = 0;
-    value_type from=0;
-    value_type to=0;
-    preference_t * pref=0;
-
+    gap<preference_t> * p=0;
+    
 };
 
 
-
+template<typename preference_t>
+gap_iterator<preference_t> gap<preference_t>::iterator(){
+    return gap_iterator<preference_t>(this);
+}
 
 
 
