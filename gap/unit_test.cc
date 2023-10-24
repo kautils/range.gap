@@ -73,12 +73,6 @@ struct gap{
     gap(preference_t * pref) : pref(pref){}
     ~gap(){}
 
-    static constexpr auto kBothOvfSame=2;
-    static constexpr auto kBothOvfDifferent=4;
-    static constexpr auto kEitherOvfLeft=8;
-    static constexpr auto kEitherOvfRight=16;
-    static constexpr auto kBlockSize =(sizeof(value_type)*2);
-    
     void initialize(value_type __from, value_type __to){
         
         
@@ -242,6 +236,9 @@ struct gap{
         auto lmb_real_value = [](auto * m,auto * pref) -> current{
             auto res=current{};
             auto value_ptr = (value_type*) 0;
+            
+            // todo : not efficient
+            
             pref->read_value(m->cur,&(value_ptr = &res.l));
             pref->read_value(m->cur+sizeof(value_type),&(value_ptr = &res.r));
             auto adjust_r = (m->r_adj&(m->cur+(kBlockSize) >= m->end_)); // add condition to detect last one
@@ -269,6 +266,13 @@ struct gap{
     }
     
     bool operator!=(self_type & r){ return (cur != r.cur) &(cur != r.cur+sizeof(value_type)); }
+    
+private:
+    
+    static constexpr int kBothOvfSame=2;
+    static constexpr int kEitherOvfLeft=4;
+    static constexpr int kEitherOvfRight=8;
+    static constexpr offset_type kBlockSize =sizeof(value_type)*2;
     
     bool virtual_end_f = false; // this member is compromise. i could not express the detection of last elem without this bit.  
     bool l_adj = false;
@@ -345,7 +349,6 @@ int main(){
         auto is_even = !bool(b0.nearest_pos%(sizeof(value_type)*2)); 
         if(is_even){
             value = b0.nearest_value;
-            //pref.read_value(b0.nearest_pos,&ptr);
         }else{
             auto ptr = &value;
             pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
@@ -359,7 +362,6 @@ int main(){
             pref.read_value(b0.nearest_pos+sizeof(value_type),&ptr);
         }else{
             value = b0.nearest_value;
-            //pref.read_value(b0.nearest_pos,&ptr);
         }
     };
 
@@ -376,13 +378,13 @@ int main(){
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
             from = 0;to = 24; // either ovf(l) expect 0 10 
-            from = 26;to = 34; // either ovf(l) expect 0 10 // todo :  * 
-            from = 26;to = 45; // either ovf(l) expect 0 10 // todo : * 
-//            from = 0;to = 15; // either ovf(l) expect 0 10   
-//            from = 0;to = 40; // either ovf(l)  
-//            from = 15;to = 2005; // either ovf(u) 
-//            from = 25;to = 2005; // either ovf(u)  
-//            from = 5;to = 890; // either ovf(u)  
+            from = 26;to = 34; // either ovf(l) expect 0 10  
+            from = 26;to = 45; // either ovf(l) expect 0 10  
+            from = 0;to = 15; // either ovf(l) expect 0 10   
+            from = 0;to = 40; // either ovf(l)  
+            from = 15;to = 2005; // either ovf(u) 
+            from = 25;to = 2005; // either ovf(u)  
+            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
