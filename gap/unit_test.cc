@@ -153,11 +153,12 @@ struct gap{
         auto is_ovf_both_different = (b0.overflow&b1.overflow)&!is_ovf_both_same;
         {
             ovf_state=
-                  kBothOvfSame*is_ovf_both_same
-                 +kBothOvfDifferent*is_ovf_both_different
-                 +kEitherOvfLeft *(is_ovf_either*b0.overflow)
-                 +kEitherOvfRight*(is_ovf_either*b1.overflow);
+                  is_ovf_both_same*kBothOvfSame
+                 +is_ovf_both_different*(kEitherOvfLeft|kEitherOvfRight)
+                 +(is_ovf_either*b0.overflow)*kEitherOvfLeft
+                 +(is_ovf_either*b1.overflow)*kEitherOvfRight;
         }
+        
 
         //is_ovf_both_different
         begin_ = 
@@ -197,6 +198,7 @@ struct gap{
         r_adj = 
                 !ovf_state*!b1_is_contaied
                 +ovf_state*r_adj;
+        virtual_end_f=false;
     }
     
     struct current{ value_type l =0;value_type r =0; }; 
@@ -212,9 +214,22 @@ struct gap{
         return res;
     }
     self_type & operator++(){ 
+        if((cur==begin_)*ovf_state&kEitherOvfLeft){ 
+            // if ovf b0 & first-one then virtual elem  
+            ovf_state^=kEitherOvfLeft;
+        }
+        else if(((cur+sizeof(value_type)*2)>=end_)*ovf_state&kEitherOvfRight){  
+//            // ovf b1 & last-one then virtual elem
+            ovf_state^=kEitherOvfRight;
+        }
+        else{
+            cur += kBlockSize;
+        }
+        return *this; 
+    }
+    current operator*() { 
         
-    
-        auto lmb_virtual_value = [](auto from,auto to,bool lr, auto * pref){
+        auto lmb_virtual_value = [](auto from,auto to,bool lr, auto * pref)->current{
             auto cur = current{};
             auto max_pos = pref->size();
             auto min_pos = 0;
@@ -235,44 +250,53 @@ struct gap{
                             +!lr*uintptr_t(&cur.r));
                     *input_p = lr*from + !lr*to; 
                 }
-//                printf("virtual element : l,r{%d,%d} pole(%lld,%lld)\n",lr,!lr,cur.l,cur.r);
-//                fflush(stdout);
             }
+            return cur;
         };
         
-//        if(ovf_state&kBothOvfSame){
-//            //printf("kBothOvfSame\n");fflush(stdout);
-//        }else if(ovf_state&kBothOvfDifferent){
-////            printf("kBothOvfDifferent\n");fflush(stdout);
-//            lmb_virtual_value(from,to,true,pref);
-//            lmb_virtual_value(from,to,false,pref);
-//        }else if(ovf_state&kEitherOvf){
-////            printf("kEitherOvf\n");fflush(stdout);
-////            lmb_virtual_value(from,to,b0.overflow,&pref);
+        auto lmb_real_value = [](auto * m,auto * pref) -> current{
+            auto res=current{};
+            auto value_ptr = (value_type*) 0;
+            pref->read_value(m->cur,&(value_ptr = &res.l));
+            pref->read_value(m->cur+sizeof(value_type),&(value_ptr = &res.r));
+            auto adjust_r = (m->r_adj&(m->cur+(kBlockSize) >= m->end_)); // add condition to detect last one
+            m->l_adj=false; // only first time is concerned if it is true
+            return res;
+        };
+
+        {
+            auto virtual_begin = (cur==begin_)*ovf_state&kEitherOvfLeft; 
+            if(virtual_begin | virtual_end_f){
+                virtual_end_f=false;
+                return lmb_virtual_value(from,to,virtual_begin,pref);
+            }else{
+                virtual_end_f = ((cur+kBlockSize)>=end_)*ovf_state&kEitherOvfRight; 
+                l_adj=false;
+                return lmb_real_value(this,pref);
+            }
+        }
+//        
+//        auto virtual_begin = (cur==begin_)*ovf_state&kEitherOvfLeft; 
+//        auto virtual_end = ((cur+kBlockSize)>=end_)*ovf_state&kEitherOvfRight; 
+//        if(virtual_begin){
+//            return lmb_virtual_value(from,to,true,pref);
+//        }else if(virtual_end){
+//            virtual_end_f=true;
+//            return lmb_real_value(this,pref);
+//        }else{
+//            if(virtual_end_f){
+//                virtual_end_f=false;
+//                return lmb_virtual_value(from,to,false,pref);
+//            }else{
+//                l_adj=false;
+//                return lmb_real_value(this,pref);
+//            }
 //        }
-        
-        // if ovf b0 & first
-        // if ovf b1 & last
-        // then ignore once
-        cur += kBlockSize;
-        return *this; 
-    }
-    current operator*() { 
-//        constexpr auto kBlockSize =(sizeof(value_type)*2);
-        auto res=current{};
-        auto value_ptr = (value_type*) 0;
-        pref->read_value(cur,&(value_ptr = &res.l));
-        pref->read_value(cur+sizeof(value_type),&(value_ptr = &res.r));
-        auto adjust_r = (r_adj&(cur+(kBlockSize) >= end_)); // add condition to detect last one
-        l_adj=false; // only first time is concerned if it is true
-        return res;
     }
     
-    bool operator!=(self_type & r){
-        return (cur != r.cur) &(cur != r.cur+sizeof(value_type));
-    }
+    bool operator!=(self_type & r){ return (cur != r.cur) &(cur != r.cur+sizeof(value_type)); }
     
-    
+    bool virtual_end_f = false; // this member is compromise. i could not express the detection of last elem without this bit.  
     bool l_adj = false;
     bool r_adj = false;
 
@@ -377,14 +401,14 @@ int main(){
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
-            from = 0;to = 24; // either ovf(l) expect 0 10 
-            from = 26;to = 34; // either ovf(l) expect 0 10 
-            from = 26;to = 45; // either ovf(l) expect 0 10 
-            from = 0;to = 15; // either ovf(l) expect 0 10   
-            from = 0;to = 40; // either ovf(l)  
-            from = 15;to = 2005; // either ovf(u) 
-            from = 25;to = 2005; // either ovf(u)  
-            from = 5;to = 890; // either ovf(u)  
+//            from = 0;to = 24; // either ovf(l) expect 0 10 
+//            from = 26;to = 34; // either ovf(l) expect 0 10 
+//            from = 26;to = 45; // either ovf(l) expect 0 10 
+//            from = 0;to = 15; // either ovf(l) expect 0 10   
+//            from = 0;to = 40; // either ovf(l)  
+//            from = 15;to = 2005; // either ovf(u) 
+//            from = 25;to = 2005; // either ovf(u)  
+//            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
