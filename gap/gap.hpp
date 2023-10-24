@@ -132,18 +132,18 @@ struct gap{
         return res;
     }
     self_type & operator++(){ 
-        auto cond_velem_beg = (cur==begin_)*ovf_state&kEitherOvfLeft;
-        auto cond_velem_end = ((cur+sizeof(value_type)*2)>=end_)*ovf_state&kEitherOvfRight;
+        
+        auto cond_velem_beg = (cur==begin_)*bool(ovf_state&kEitherOvfLeft);
+        auto cond_velem_end = ((cur+sizeof(value_type)*2)>=end_)*bool(ovf_state&kEitherOvfRight);
         auto cond_velem = cond_velem_beg | cond_velem_end;
-        
         ovf_state = 
-                  cond_velem_beg*(ovf_state^kEitherOvfLeft)
-                +!cond_velem_beg*ovf_state;
-        
-        ovf_state = 
-                  cond_velem_end*(ovf_state^kEitherOvfRight)
-                +!cond_velem_end*ovf_state;
-        
+                  // if(cond_velem_beg)
+                  cond_velem_beg*(ovf_state^kEitherOvfLeft) 
+                +!cond_velem_beg*(
+                  //else if(cond_velem_end)
+                      cond_velem_end*(ovf_state^kEitherOvfRight)
+                    +!cond_velem_end*(ovf_state)
+                );
         cur += (!cond_velem*kBlockSize);
         return *this; 
     }
@@ -195,12 +195,12 @@ struct gap{
         };
 
         {
-            auto virtual_begin = (cur==begin_)*ovf_state&kEitherOvfLeft; 
+            auto virtual_begin = (cur==begin_)*(ovf_state&kEitherOvfLeft); 
             if(virtual_begin | virtual_end_f){
                 virtual_end_f=false;
                 return lmb_virtual_value(from,to,virtual_begin,pref);
             }else{
-                virtual_end_f = ((cur+kBlockSize)>=end_)*ovf_state&kEitherOvfRight; 
+                virtual_end_f = ((cur+kBlockSize)>=end_)*(ovf_state&kEitherOvfRight); 
                 return lmb_real_value(this,pref);
             }
         }
