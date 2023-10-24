@@ -62,21 +62,39 @@ using file_syscall_16b_f_pref= file_syscall_premitive<double>;
 
 #include "kautil/algorithm/btree_search/btree_search.hpp"
 
+//template<typename preference_t>
+//struct gap_iterator{
+//    using offset_type = typename preference_t::offset_type;
+//    using value_type = typename preference_t::value_type;
+//    using self_type = gap_iterator; 
+//    gap_iterator(){}
+//    
+//    self_type begin(){ return self_type{}; }
+//    self_type end(){ return self_type{}; }
+//    self_type & operator++(self_type &){ return this; }
+//    
+//    
+//    offset_type cur;
+//};
+
 
 template<typename preference_t>
-struct gap_iterator{
+struct gap{
 
-
+    using self_type = gap;
     using value_type = typename preference_t::value_type;
     using offset_type = typename preference_t::offset_type;
 
-    gap_iterator(preference_t * pref) : pref(pref){}
-    ~gap_iterator(){}
+    gap(preference_t * pref) : pref(pref){}
+    ~gap(){}
 
-    void initialize(value_type from, value_type to){
+    void initialize(value_type __from, value_type __to){
         auto bt = kautil::algorithm::btree_search{pref};
         auto max_pos = pref->size();
         auto min_pos = 0;
+        
+        from = __from;
+        to = __to;
         ovf_state = 0;
 
         auto b0 = bt.search(from,false);
@@ -94,50 +112,101 @@ struct gap_iterator{
         
         begin_ = adjust_pos(b0,true,from);
         end_= adjust_pos(b1,false,to);
-            {
-                auto both_is_ovf = (b0.overflow&b1.overflow);
-                auto either_is_ovf = (b0.overflow^b1.overflow);
-                auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
-                ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
-                ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
-                ovf_state|=kEitherOvf*either_is_ovf;
-            }
+        {
+            auto both_is_ovf = (b0.overflow&b1.overflow);
+            auto either_is_ovf = (b0.overflow^b1.overflow);
+            auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
+            ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
+            ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
+            ovf_state|=kEitherOvf*either_is_ovf;
+        }
 
-            auto is_ovf_either = bool(ovf_state&kEitherOvf); 
-            auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
-            auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
+        auto is_ovf_either = bool(ovf_state&kEitherOvf); 
+        auto is_ovf_different = bool(ovf_state&kBothOvfDifferent);
+        auto is_ovf_adjust_not_need_itreation = bool(ovf_state&kBothOvfSame);
+        
+        
+        //is_ovf_different
+        begin_ = 
+                  is_ovf_different*sizeof(value_type)
+                +!is_ovf_different*begin_;
+        
+        end_ = 
+                  is_ovf_different*(max_pos-(sizeof(value_type)*2))
+                +!is_ovf_different*end_;
+        
+        //is_ovf_either_begin
+        begin_ = 
+                  is_ovf_either*(!b0.overflow*begin_ +b0.overflow*sizeof(value_type))
+                +!is_ovf_either*begin_;
+        end_ = 
+                 is_ovf_either*(!b1.overflow*end_ + b1.overflow*(max_pos-sizeof(value_type)))
+               +!is_ovf_either*end_;
+        
+        // is_same
+        begin_*=!is_ovf_adjust_not_need_itreation;
+        end_*=!is_ovf_adjust_not_need_itreation;
             
-            
-            //is_ovf_different
-            begin_ = 
-                      is_ovf_different*sizeof(value_type)
-                    +!is_ovf_different*begin_;
-            
-            end_ = 
-                      is_ovf_different*(max_pos-(sizeof(value_type)*2))
-                    +!is_ovf_different*end_;
-            
-            //is_ovf_either_begin
-            begin_ = 
-                      is_ovf_either*(!b0.overflow*begin_ +b0.overflow*sizeof(value_type))
-                    +!is_ovf_either*begin_;
-            end_ = 
-                     is_ovf_either*(!b1.overflow*end_ + b1.overflow*(max_pos-sizeof(value_type)))
-                   +!is_ovf_either*end_;
-            
-            // is_same
-            begin_*=!is_ovf_adjust_not_need_itreation;
-            end_*=!is_ovf_adjust_not_need_itreation;
-                
+    
+        l_adj = false;
+        r_adj = false;
+    
+        l_adj = 
+                  is_ovf_either*(!b0.overflow*!b0_is_contaied)
+                +!is_ovf_either*l_adj;
+        r_adj = 
+                  is_ovf_either*(!b1.overflow*!b1_is_contaied)
+                +!is_ovf_either*r_adj;
+        
+        l_adj = 
+                !ovf_state*!b0_is_contaied
+                +ovf_state*l_adj;
+        r_adj = 
+                !ovf_state*!b1_is_contaied
+                +ovf_state*r_adj;
     }
-
-
-
-
+    
+    struct current{
+        value_type l =0;
+        value_type r =0;
+    }; 
+    
+    self_type begin(){ 
+        auto res = *this; 
+        res.cur = begin_;
+        return res;
+    }
+    
+    self_type end(){ 
+        auto res = *this; 
+        res.cur = end_;
+        return res;
+    }
+    self_type & operator++(){ 
+        // if ovf b0 & first
+        // if ovf b1 & last
+        // then ignore once
+        
+        cur += sizeof(value_type)*2;
+        return *this; 
+    }
+    current operator*() { 
+        return current{};
+    }
+    
+    bool operator!=(self_type &){ return false; }
+    
+    
+    bool l_adj = false;
+    bool r_adj = false;
 
     int ovf_state = 0;
+    offset_type cur = 0;
     offset_type begin_ =0;
     offset_type end_ = 0;
+    value_type from=0;
+    value_type to=0;
+    
     preference_t * pref=0;
 
 };
@@ -397,7 +466,15 @@ int main(){
         
         
         
+        auto g = gap{&pref};
+        
+        for(auto const& elem : g){
+            
+        }
+        
+        
     }
+    
     
     
     
