@@ -148,14 +148,14 @@ int main(){
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
-//            from = 0;to = 24; // either ovf(l) expect 0 10 
-//            from = 26;to = 34; // either ovf(l) expect 0 10  
-//            from = 26;to = 45; // either ovf(l) expect 0 10  
-//            from = 0;to = 15; // either ovf(l) expect 0 10   
-//            from = 0;to = 40; // either ovf(l)  
-//            from = 15;to = 2005; // either ovf(u) 
-//            from = 25;to = 2005; // either ovf(u)  
-//            from = 5;to = 890; // either ovf(u)  
+            from = 0;to = 24; // either ovf(l) expect 0 10 
+            from = 26;to = 34; // either ovf(l) expect 0 10  
+            from = 26;to = 45; // either ovf(l) expect 0 10  
+            from = 0;to = 15; // either ovf(l) expect 0 10   
+            from = 0;to = 40; // either ovf(l)  
+            from = 15;to = 2005; // either ovf(u) 
+            from = 25;to = 2005; // either ovf(u)  
+            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         

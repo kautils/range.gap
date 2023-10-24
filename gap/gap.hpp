@@ -104,7 +104,24 @@ struct gap{
         end_*=!is_ovf_both_same;
             
     
+    
+        l_adj = false;
+        r_adj = false;
+        l_adj = 
+                  is_ovf_either*(!b0.overflow*!b0_is_contaied)
+                +!is_ovf_either*l_adj;
+        r_adj = 
+                  is_ovf_either*(!b1.overflow*!b1_is_contaied)
+                +!is_ovf_either*r_adj;
         
+        l_adj = 
+                !ovf_state*!b0_is_contaied
+                +ovf_state*l_adj;
+        r_adj = 
+                !ovf_state*!b1_is_contaied
+                +ovf_state*r_adj;
+
+    
     }
     gap_iterator<preference_t> iterator();
     
@@ -115,6 +132,8 @@ private:
     static constexpr int kEitherOvfRight=8;
     static constexpr offset_type kBlockSize =sizeof(value_type)*2;
     
+    bool l_adj = false; // need to adjust left pole
+    bool r_adj = false; // need to adjust right pole
     int ovf_state = 0; // 0 : nothing ovf, 2 : ovf both,same,  4 : ovf both,different, 8 : ovf either
     offset_type begin_ =0;
     offset_type end_ = 0;
@@ -142,7 +161,7 @@ struct gap_iterator{
         res.cur = p->begin_;
         res.ovf_state=p->ovf_state;
         res.virtual_begin_f = (res.cur==p->begin_)*bool(res.ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
-        res.virtual_end_f = ((res.cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
+        res.virtual_end_f = ((res.cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(res.ovf_state&gap<preference_t>::kEitherOvfRight); 
         return res;
     }
     
@@ -154,8 +173,6 @@ struct gap_iterator{
     }
 
     self_type & operator++(){ 
-        virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
-        auto cond_velem = virtual_begin_f | virtual_end_f;
         ovf_state = 
                   // if(cond_velem_beg)
                   virtual_begin_f*(ovf_state^gap<preference_t>::kEitherOvfLeft) 
@@ -164,7 +181,9 @@ struct gap_iterator{
                       virtual_end_f*(ovf_state^gap<preference_t>::kEitherOvfRight)
                     +!virtual_end_f*(ovf_state)
                 );
-        cur += (!cond_velem*gap<preference_t>::kBlockSize);
+        
+        virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight);
+        cur += (!(virtual_end_f|virtual_begin_f)*gap<preference_t>::kBlockSize);
         virtual_begin_f = (cur==p->begin_)*bool(ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
         return *this; 
     }
@@ -197,23 +216,24 @@ struct gap_iterator{
         
         auto lmb_real_value = [](auto * m,auto * pref) -> current{
             auto res=current{};
-            auto value_ptr = (value_type*) 0;
-            auto p = m->p;
-            
-            pref->read_value(m->cur,&(value_ptr = &res.l));
-            pref->read_value(m->cur+sizeof(value_type),&(value_ptr = &res.r));
-//            auto adjust_r = (m->r_adj&(m->cur+(gap<preference_t>::kBlockSize) >= p->end_)); // add condition to detect last one
-            auto adjust_r = (m->virtual_end_f&(m->cur+(gap<preference_t>::kBlockSize) >= p->end_)); // add condition to detect last one
-            // may not be efficient. 
-            res.l=
-//                      m->l_adj*p->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
-//                    +!m->l_adj*res.l;
-                      m->virtual_begin_f*p->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
-                    +!m->virtual_begin_f*res.l;
-            res.r=
-                      adjust_r*p->to   // 1) same as 0) but this should occure the last iteration.
-                    +!adjust_r*res.r;
-//            m->l_adj=false; // only first time is concerned if it is true
+            {
+                auto p = m->p;
+                auto value_ptr = (value_type*) 0;
+                
+                pref->read_value(m->cur,&(value_ptr = &res.l));
+                pref->read_value(m->cur+sizeof(value_type),&(value_ptr = &res.r));
+                
+                bool l_adj = p->l_adj&(m->cur == p->begin_);
+                bool r_adj = p->r_adj&(m->cur+(gap<preference_t>::kBlockSize) >= p->end_);
+                
+                // may not be efficient. 
+                res.l=
+                          l_adj*p->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
+                        +!l_adj*res.l;
+                res.r=
+                          r_adj*p->to   // 1) same as 0) but this should occure the last iteration.
+                        +!r_adj*res.r;
+            }
             return res;
         };
 
