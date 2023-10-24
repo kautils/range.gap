@@ -314,8 +314,6 @@ int main(){
         
         auto g = gap{&pref};
         g.initialize(from,to);
-        auto size = g.size();
-        
         for(auto const& elem : g.iterator()){
             printf("l,r(%lld,%lld)\n",elem.l,elem.r);
             fflush(stdout);
@@ -324,8 +322,9 @@ int main(){
         
         
         auto itr = g.iterator();
+        auto size = g.size();
         auto b = itr.begin();
-        auto e = itr.end();
+        auto e = itr.end()-1;
 
         auto cur = b+4;
         for(;cur < e;++cur){

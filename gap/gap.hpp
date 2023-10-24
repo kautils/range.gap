@@ -161,7 +161,7 @@ struct gap_iterator{
     
     struct current{ value_type l =0;value_type r =0; }; 
     self_type begin(){ 
-        auto res = *this; 
+        auto res = *this;
         res.cur = p->begin_;
         res.ovf_state=p->ovf_state;
         res.update_virtual_condition_begin();
@@ -178,11 +178,19 @@ struct gap_iterator{
     
     
     bool operator<(self_type const& r ){ return cur < r.cur; }
+    
+    
     self_type operator+(offset_type n){ 
         auto res = *this;
-        res.cur += n * gap<preference_t>::kBlockSize; 
-        res.update_virtual_condition_begin();
-        res.update_virtual_condition_end();
+        // if overflow, then shoudl be adjusted.
+        res.move_cur((n-virtual_begin_f) * gap<preference_t>::kBlockSize);
+        return res;
+    }
+    
+    self_type operator-(offset_type n){ 
+        auto res = *this;
+        // if overflow, then shoudl be adjusted.
+        res.move_cur((n-virtual_end_f) * -gap<preference_t>::kBlockSize);
         return res;
     }
     
@@ -275,6 +283,13 @@ private:
     void update_virtual_condition_end(){
         virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
     }
+    
+    void move_cur(offset_type value){
+        cur += value; 
+        update_virtual_condition_begin();
+        update_virtual_condition_end();
+    }
+
     
     bool virtual_end_f = false; // this member is compromise. i could not express the detection of last elem without this flag.  
     bool virtual_begin_f = false; 
