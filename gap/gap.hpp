@@ -238,9 +238,11 @@ struct gap_iterator{
         };
 
         {
-            if(virtual_begin_f | virtual_end_f){
+            // if overflow then left or right pole is expressed with input(expressed virtually) 
+            // else expressed with the values reading from region
+            if(virtual_begin_f | virtual_end_f){ 
                 return lmb_virtual_value(p->from,p->to,virtual_begin_f,p->pref);
-            }else{
+            }else{ 
                 return lmb_real_value(this,p->pref);
             }
         }
