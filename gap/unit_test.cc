@@ -62,21 +62,6 @@ using file_syscall_16b_f_pref= file_syscall_premitive<double>;
 
 #include "kautil/algorithm/btree_search/btree_search.hpp"
 
-//template<typename preference_t>
-//struct gap_iterator{
-//    using offset_type = typename preference_t::offset_type;
-//    using value_type = typename preference_t::value_type;
-//    using self_type = gap_iterator; 
-//    gap_iterator(){}
-//    
-//    self_type begin(){ return self_type{}; }
-//    self_type end(){ return self_type{}; }
-//    self_type & operator++(self_type &){ return this; }
-//    
-//    
-//    offset_type cur;
-//};
-
 
 template<typename preference_t>
 struct gap{
@@ -260,6 +245,13 @@ struct gap{
             pref->read_value(m->cur,&(value_ptr = &res.l));
             pref->read_value(m->cur+sizeof(value_type),&(value_ptr = &res.r));
             auto adjust_r = (m->r_adj&(m->cur+(kBlockSize) >= m->end_)); // add condition to detect last one
+            
+            res.l=
+                      m->l_adj*m->from // 0) from is not contaied by existing range(it exists in vacant), so adjust pole value with from. 
+                    +!m->l_adj*res.l;
+            res.r=
+                      adjust_r*m->to   // 1) same as 0) but this should occure the last iteration.
+                    +!adjust_r*res.r;
             m->l_adj=false; // only first time is concerned if it is true
             return res;
         };
@@ -271,27 +263,9 @@ struct gap{
                 return lmb_virtual_value(from,to,virtual_begin,pref);
             }else{
                 virtual_end_f = ((cur+kBlockSize)>=end_)*ovf_state&kEitherOvfRight; 
-                l_adj=false;
                 return lmb_real_value(this,pref);
             }
         }
-//        
-//        auto virtual_begin = (cur==begin_)*ovf_state&kEitherOvfLeft; 
-//        auto virtual_end = ((cur+kBlockSize)>=end_)*ovf_state&kEitherOvfRight; 
-//        if(virtual_begin){
-//            return lmb_virtual_value(from,to,true,pref);
-//        }else if(virtual_end){
-//            virtual_end_f=true;
-//            return lmb_real_value(this,pref);
-//        }else{
-//            if(virtual_end_f){
-//                virtual_end_f=false;
-//                return lmb_virtual_value(from,to,false,pref);
-//            }else{
-//                l_adj=false;
-//                return lmb_real_value(this,pref);
-//            }
-//        }
     }
     
     bool operator!=(self_type & r){ return (cur != r.cur) &(cur != r.cur+sizeof(value_type)); }
@@ -401,9 +375,9 @@ int main(){
             from = 0;to = 0; // both ovf(l) expect 0,0 
             from = 2000;to = 2005; // both ovf(u) expect 2000,2005
             from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
-//            from = 0;to = 24; // either ovf(l) expect 0 10 
-//            from = 26;to = 34; // either ovf(l) expect 0 10 
-//            from = 26;to = 45; // either ovf(l) expect 0 10 
+            from = 0;to = 24; // either ovf(l) expect 0 10 
+            from = 26;to = 34; // either ovf(l) expect 0 10 // todo :  * 
+            from = 26;to = 45; // either ovf(l) expect 0 10 // todo : * 
 //            from = 0;to = 15; // either ovf(l) expect 0 10   
 //            from = 0;to = 40; // either ovf(l)  
 //            from = 15;to = 2005; // either ovf(u) 
