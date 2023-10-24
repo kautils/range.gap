@@ -314,6 +314,10 @@ int main(){
         
         auto g = gap{&pref};
         g.initialize(from,to);
+        
+        auto size = g.size();
+        
+        
         for(auto const& elem : g.iterator()){
             printf("l,r(%lld,%lld)\n",elem.l,elem.r);
             fflush(stdout);

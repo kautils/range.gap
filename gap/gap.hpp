@@ -123,6 +123,9 @@ struct gap{
 
     
     }
+    
+    uint64_t size(){ return pref->size() / kBlockSize; }
+    
     gap_iterator<preference_t> iterator();
     
 private:
