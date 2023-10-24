@@ -89,6 +89,12 @@ struct gap{
     ~gap(){}
 
     void initialize(value_type __from, value_type __to){
+        
+        // these are not member because i wannaed hide them.
+        constexpr auto kBothOvfSame=2;
+        constexpr auto kBothOvfDifferent=4;
+        constexpr auto kEitherOvf=8;
+        
         auto is_contained = [](auto & b0){
             auto block_size =(sizeof(value_type)*2);
             auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
@@ -133,10 +139,6 @@ struct gap{
         auto b0 = bt.search(from,false);
         auto b1 = bt.search(to,false);
 
-        constexpr auto kBothOvfSame=2;
-        constexpr auto kBothOvfDifferent=4;
-        constexpr auto kEitherOvf=8;
-        
         auto b0_is_contaied = is_contained(b0);
         auto b1_is_contaied = is_contained(b1);
         auto block_size = sizeof(value_type)*2;
@@ -149,9 +151,9 @@ struct gap{
             auto both_is_ovf = (b0.overflow&b1.overflow);
             auto either_is_ovf = (b0.overflow^b1.overflow);
             auto both_is_the_same=(b0.nearest_pos == b1.nearest_pos);
-            ovf_state|=kBothOvfSame*(both_is_ovf&both_is_the_same);
-            ovf_state|=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
-            ovf_state|=kEitherOvf*either_is_ovf;
+            ovf_state&=kBothOvfSame*(both_is_ovf&both_is_the_same);
+            ovf_state&=kBothOvfDifferent*(both_is_ovf&!both_is_the_same);
+            ovf_state&=kEitherOvf*either_is_ovf;
         }
 
         auto is_ovf_either = bool(ovf_state&kEitherOvf); 
@@ -228,6 +230,7 @@ struct gap{
         pref->read_value(cur,&(value_ptr = &res.l));
         pref->read_value(cur+sizeof(value_type),&(value_ptr = &res.r));
         auto adjust_r = (r_adj&(cur+(sizeof(value_type)*2) >= end_)); // add condition to detect last one
+        l_adj=false; // only first time is concerned if it is true
         return res;
     }
     
@@ -239,13 +242,12 @@ struct gap{
     bool l_adj = false;
     bool r_adj = false;
 
-    int ovf_state = 0;
+    int ovf_state = 0; // 0 : nothing ovf, 2 : ovf both,same,  4 : ovf both,different, 8 : ovf either
     offset_type cur = 0;
     offset_type begin_ =0;
     offset_type end_ = 0;
     value_type from=0;
     value_type to=0;
-    
     preference_t * pref=0;
 
 };
