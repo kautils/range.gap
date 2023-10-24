@@ -314,14 +314,28 @@ int main(){
         
         auto g = gap{&pref};
         g.initialize(from,to);
-        
         auto size = g.size();
-        
         
         for(auto const& elem : g.iterator()){
             printf("l,r(%lld,%lld)\n",elem.l,elem.r);
             fflush(stdout);
         }
+        
+        
+        
+        auto itr = g.iterator();
+        auto b = itr.begin();
+        auto e = itr.end();
+
+        auto cur = b+4;
+        for(;cur < e;++cur){
+            auto elem = *cur;
+            printf("++++l,r(%lld,%lld)\n",elem.l,elem.r);
+            fflush(stdout);
+        }
+
+        
+        
         
         // implement increment|decrement cursor so that can be treated by multiple threads.
         

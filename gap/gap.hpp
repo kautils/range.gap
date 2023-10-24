@@ -156,6 +156,7 @@ struct gap_iterator{
     using value_type = typename preference_t::value_type;
     using offset_type = typename preference_t::offset_type;
 
+    gap_iterator(gap_iterator const& )=default;
     gap_iterator(gap<preference_t> * p):p(p){}
     
     struct current{ value_type l =0;value_type r =0; }; 
@@ -163,8 +164,8 @@ struct gap_iterator{
         auto res = *this; 
         res.cur = p->begin_;
         res.ovf_state=p->ovf_state;
-        res.virtual_begin_f = (res.cur==p->begin_)*bool(res.ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
-        res.virtual_end_f = ((res.cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(res.ovf_state&gap<preference_t>::kEitherOvfRight); 
+        res.update_virtual_condition_begin();
+        res.update_virtual_condition_end();
         return res;
     }
     
@@ -174,7 +175,18 @@ struct gap_iterator{
         res.ovf_state=p->ovf_state;
         return res;
     }
-
+    
+    
+    bool operator<(self_type const& r ){ return cur < r.cur; }
+    self_type operator+(offset_type n){ 
+        auto res = *this;
+        res.cur += n * gap<preference_t>::kBlockSize; 
+        res.update_virtual_condition_begin();
+        res.update_virtual_condition_end();
+        return res;
+    }
+    
+    
     self_type & operator++(){ 
         ovf_state = 
                   // if(cond_velem_beg)
@@ -185,9 +197,11 @@ struct gap_iterator{
                     +!virtual_end_f*(ovf_state)
                 );
         
+//        update_virtual_condition_end();
         virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight);
         cur += (!(virtual_end_f|virtual_begin_f)*gap<preference_t>::kBlockSize);
         virtual_begin_f = (cur==p->begin_)*bool(ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
+//        update_virtual_condition_begin();
         return *this; 
     }
     
@@ -254,6 +268,14 @@ struct gap_iterator{
     bool operator!=(self_type & r){ return (cur != r.cur) &(cur != r.cur+sizeof(value_type)); }
     
 private:
+    
+    void update_virtual_condition_begin(){
+        virtual_begin_f = (cur==p->begin_)*bool(ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
+    }
+    void update_virtual_condition_end(){
+        virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
+    }
+    
     bool virtual_end_f = false; // this member is compromise. i could not express the detection of last elem without this flag.  
     bool virtual_begin_f = false; 
     int ovf_state = 0; // 0 : nothing ovf, 2 : ovf both,same,  4 : ovf both,different, 8 : ovf either
