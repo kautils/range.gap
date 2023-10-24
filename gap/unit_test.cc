@@ -89,6 +89,39 @@ struct gap{
     ~gap(){}
 
     void initialize(value_type __from, value_type __to){
+        auto is_contained = [](auto & b0){
+            auto block_size =(sizeof(value_type)*2);
+            auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+            auto b0_cond_not_contained = 
+                     (b0_nearest_is_former&(b0.direction < 0))
+                    |(!b0_nearest_is_former&(b0.direction > 0));
+            return !(b0_cond_not_contained|b0.overflow);
+        };
+    
+        auto adjust_pos = [](auto & b0,bool is_from,auto const& current_value) -> offset_type {
+        auto block_size =(sizeof(value_type)*2);
+        auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
+            return static_cast<offset_type>(
+                
+                //from
+                // contained
+                 ((is_from &  b0_nearest_is_former &(b0.direction >= 0)) * (b0.nearest_pos+(sizeof(value_type))))
+                +((is_from &  !b0_nearest_is_former &(b0.direction <= 0)) *  b0.nearest_pos)
+                // !contained
+                +((is_from &  b0_nearest_is_former &!(b0.direction >= 0)) * (b0.nearest_pos-(sizeof(value_type))))
+                +((is_from &  !b0_nearest_is_former &!(b0.direction <= 0)) *  b0.nearest_pos)
+                 
+                // to
+                // contained
+                +((!is_from & b0_nearest_is_former  & (b0.direction >= 0))  * (b0.nearest_pos))
+                +((!is_from & !b0_nearest_is_former & (b0.direction <= 0))) * (b0.nearest_pos-sizeof(value_type))
+                // !contained
+                +((!is_from & b0_nearest_is_former  &!(b0.direction >= 0))  * (b0.nearest_pos))
+                +((!is_from & !b0_nearest_is_former &!(b0.direction <= 0))) * (b0.nearest_pos+sizeof(value_type))
+            );
+        };
+        
+        
         auto bt = kautil::algorithm::btree_search{pref};
         auto max_pos = pref->size();
         auto min_pos = 0;
@@ -186,15 +219,21 @@ struct gap{
         // if ovf b0 & first
         // if ovf b1 & last
         // then ignore once
-        
         cur += sizeof(value_type)*2;
         return *this; 
     }
     current operator*() { 
-        return current{};
+        auto res=current{};
+        auto value_ptr = (value_type*) 0;
+        pref->read_value(cur,&(value_ptr = &res.l));
+        pref->read_value(cur+sizeof(value_type),&(value_ptr = &res.r));
+        auto adjust_r = (r_adj&(cur+(sizeof(value_type)*2) >= end_)); // add condition to detect last one
+        return res;
     }
     
-    bool operator!=(self_type &){ return false; }
+    bool operator!=(self_type & r){
+        return (cur != r.cur) &(cur != r.cur+sizeof(value_type));
+    }
     
     
     bool l_adj = false;
@@ -305,11 +344,11 @@ int main(){
             from = 0;to = 24; // either ovf(l) expect 0 10 
             from = 26;to = 34; // either ovf(l) expect 0 10 
             from = 26;to = 45; // either ovf(l) expect 0 10 
-//            from = 0;to = 15; // either ovf(l) expect 0 10   
-//            from = 0;to = 40; // either ovf(l)  
-//            from = 15;to = 2005; // either ovf(u) 
-//            from = 25;to = 2005; // either ovf(u)  
-//            from = 5;to = 890; // either ovf(u)  
+            from = 0;to = 15; // either ovf(l) expect 0 10   
+            from = 0;to = 40; // either ovf(l)  
+            from = 15;to = 2005; // either ovf(u) 
+            from = 25;to = 2005; // either ovf(u)  
+            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
         
@@ -453,11 +492,12 @@ int main(){
                     auto r = value_type(0);
                     auto value_ptr = (value_type*) 0;  
                     constexpr auto block_size = sizeof(value_type)*2;
-                    for(auto cur = begin; cur < end; cur+=block_size){
+//                    for(auto cur = begin; cur < end; cur+=block_size){
+                    for(auto cur = begin; (cur != end) & (cur != (end+sizeof(value_type)) ) ; cur+=block_size){
                         pref.read_value(cur,&(value_ptr = &l));
                         pref.read_value(cur+sizeof(value_type),&(value_ptr = &r));
                         auto adjust_r = (r_adj&(cur+block_size >= end)); // add condition to detect last one
-                        printf("begin,end(%ld,%ld)\n",l_adj*from+!l_adj*l,adjust_r*to+!adjust_r*r);
+                        printf("begin,end(%ld,%ld) cur,end(%ld,%ld)\n",l_adj*from+!l_adj*l,adjust_r*to+!adjust_r*r,cur,end);
                         l_adj=false;
                     }
                 }
@@ -465,11 +505,11 @@ int main(){
         }// begin , end
         
         
-        
         auto g = gap{&pref};
-        
+        g.initialize(from,to);
         for(auto const& elem : g){
-            
+            printf("l,r(%lld,%lld)\n",elem.l,elem.r);
+            fflush(stdout);
         }
         
         
