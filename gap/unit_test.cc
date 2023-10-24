@@ -315,11 +315,11 @@ int main(){
         auto g = gap{&pref};
         g.initialize(from,to);
         for(auto const& elem : g.iterator()){
-//        for(auto const& elem : g){
             printf("l,r(%lld,%lld)\n",elem.l,elem.r);
             fflush(stdout);
         }
         
+        // implement increment|decrement cursor so that can be treated by multiple threads.
         
     }
     
