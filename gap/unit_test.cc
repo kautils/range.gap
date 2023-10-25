@@ -148,15 +148,16 @@ int main(){
         constexpr auto kBlockSize = offset_type(sizeof(value_type)*2);
         auto from = value_type(0);auto to = value_type(0);
         {
-            from = 0;to = 0; // both ovf(l) expect 0,0 
-            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
-            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
-            from = 0;to = 24; // either ovf(l) expect 0 10 
-            from = 26;to = 34; // either ovf(l) expect 0 10  
-            from = 26;to = 45; // either ovf(l) expect 0 10  
-            from = 0;to = 15; // either ovf(l) expect 0 10   
-            from = 0;to = 40; // either ovf(l)  
-            from = 15;to = 2005; // either ovf(u) 
+            from = 25;to = 45; // both ovf(l) expect 0,0
+//            from = 0;to = 0; // both ovf(l) expect 0,0
+//            from = 2000;to = 2005; // both ovf(u) expect 2000,2005
+//            from = 0;to = 2005; // both ovf(differ) expect ?2000,2005  
+//            from = 0;to = 24; // either ovf(l) expect 0 10 
+//            from = 26;to = 34; // either ovf(l) expect 0 10  
+//            from = 26;to = 45; // either ovf(l) expect 0 10  
+//            from = 0;to = 15; // either ovf(l) expect 0 10   
+//            from = 0;to = 40; // either ovf(l)  
+//            from = 15;to = 2005; // either ovf(u) 
 //            from = 25;to = 2005; // either ovf(u)  
 //            from = 5;to = 890; // either ovf(u)  
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
@@ -169,12 +170,12 @@ int main(){
                  b0.overflow*0 
                +!b0.overflow*(
                     b0_is_contained*(
-                         !b0_is_even*b0.nearest_pos+kBlockSize 
+                         !b0_is_even*(b0.nearest_pos+sizeof(value_type))
                         + b0_is_even*b0.nearest_pos 
                     )
                   +!b0_is_contained*(
-                         !b0_is_even*b0.nearest_pos 
-                        + b0_is_even*b0.nearest_pos+kBlockSize 
+                         !b0_is_even*(b0.nearest_pos+sizeof(value_type)) 
+                        + b0_is_even*b0.nearest_pos 
                   )
                );
         
@@ -187,34 +188,38 @@ int main(){
                +!b1.overflow*(
                    b1_is_contained*(
                          !b1_is_even*b1.nearest_pos 
-                        + b1_is_even*b1.nearest_pos-kBlockSize 
+                        + b1_is_even*(b1.nearest_pos-sizeof(value_type))
                     )
                   +!b1_is_contained*(
-                         !b1_is_even*b1.nearest_pos-kBlockSize 
-                        + b1_is_even*b1.nearest_pos 
+                         !b1_is_even*b1.nearest_pos
+                        + b1_is_even*(b1.nearest_pos-sizeof(value_type))
                   )  
                );
         
         
         constexpr auto kVirtualNPos = offset_type(-3); 
-        auto cond_ovfovf_same = b0.overflow&b1.overflow&(b0.direction==b1.direction);   
+        auto cond_ovfovf_same = bool(b0.overflow&b1.overflow&(b0.direction==b1.direction));   
         auto b0_virtual_pos =
-                  cond_ovfovf_same*(-2)
-                +!cond_ovfovf_same*(
-                      b0.overflow*(-1)
-                    +!b0.overflow*(
-                      !b0_is_contained*(b0.nearest_pos/kBlockSize-1)
-                      +b0_is_contained*(kVirtualNPos)
+                static_cast<offset_type>(
+                      cond_ovfovf_same*(-2)
+                    +!cond_ovfovf_same*(
+                          b0.overflow*(-1)
+                        +!b0.overflow*(
+                          !b0_is_contained*(b0.nearest_pos/sizeof(value_type)-1)
+                          +b0_is_contained*(kVirtualNPos)
+                        )
                     )
                 );
 
         auto b1_virtual_pos =
-                  cond_ovfovf_same*(-1)
-                +!cond_ovfovf_same*(
-                      b1.overflow*(max_pos/kBlockSize+1)
-                    +!b1.overflow*(
-                      !b1_is_contained*(b1.nearest_pos/kBlockSize+1)
-                      +b1_is_contained*(kVirtualNPos)
+                static_cast<offset_type>(
+                      cond_ovfovf_same*(-1)
+                    +!cond_ovfovf_same*(
+                          b1.overflow*(max_pos/kBlockSize+1)
+                        +!b1.overflow*(
+                          !b1_is_contained*(b1.nearest_pos/kBlockSize+1)
+                          +b1_is_contained*(kVirtualNPos)
+                        )
                     )
                 );
     
@@ -226,7 +231,13 @@ int main(){
             b1.overflow&!b1_is_contained&(cur == end);
             cond_ovfovf_same&(cur == begin);
         }
-       
+    
+        
+        printf("np(%ld %ld) ",b0.nearest_pos,b1.nearest_pos);
+        printf("vp(%ld %ld) ",b0_virtual_pos,b1_virtual_pos);
+        printf("\n");
+        fflush(stdout);        
+        
 //        auto b0 = bt.search(from,false);
 //        auto b1 = bt.search(to,false);
 //        
