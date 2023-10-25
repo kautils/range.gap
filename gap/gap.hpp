@@ -104,9 +104,10 @@ struct gap{
         end_*=!is_ovf_both_same;
             
     
-    
+        
         l_adj = false;
         r_adj = false;
+        
         l_adj = 
                   is_ovf_either*(!b0.overflow*!b0_is_contaied)
                 +!is_ovf_either*l_adj;
@@ -120,8 +121,10 @@ struct gap{
         r_adj = 
                 !ovf_state*!b1_is_contaied
                 +ovf_state*r_adj;
-
     
+        
+        
+        
     }
     
     uint64_t size(){ return pref->size() / kBlockSize; }
@@ -180,21 +183,6 @@ struct gap_iterator{
     bool operator<(self_type const& r ){ return cur < r.cur; }
     
     
-    self_type operator+(offset_type n){ 
-        auto res = *this;
-        // if overflow, then shoudl be adjusted.
-        res.move_cur((n-virtual_begin_f) * gap<preference_t>::kBlockSize);
-        return res;
-    }
-    
-    self_type operator-(offset_type n){ 
-        auto res = *this;
-        // if overflow, then shoudl be adjusted.
-        res.move_cur((n-virtual_end_f) * -gap<preference_t>::kBlockSize);
-        return res;
-    }
-    
-    
     self_type & operator++(){ 
         ovf_state = 
                   // if(cond_velem_beg)
@@ -205,11 +193,23 @@ struct gap_iterator{
                     +!virtual_end_f*(ovf_state)
                 );
         
-//        update_virtual_condition_end();
-        virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight);
+        update_virtual_condition_end();
         cur += (!(virtual_end_f|virtual_begin_f)*gap<preference_t>::kBlockSize);
-        virtual_begin_f = (cur==p->begin_)*bool(ovf_state&gap<preference_t>::kEitherOvfLeft); // need not to be member
-//        update_virtual_condition_begin();
+        update_virtual_condition_begin();
+        return *this; 
+    }
+    
+    self_type & operator--(){ 
+        
+        update_virtual_condition_begin();
+        cur -= (!(virtual_end_f|virtual_begin_f)*gap<preference_t>::kBlockSize);
+        if((cur + gap<preference_t>::kBlockSize) == p->begin_){
+            ovf_state = p->ovf_state;
+            update_virtual_condition_begin();
+            update_virtual_condition_end();
+            //*this = begin();
+        }
+        update_virtual_condition_end();
         return *this; 
     }
     
@@ -284,11 +284,11 @@ private:
         virtual_end_f = ((cur+gap<preference_t>::kBlockSize)>=p->end_)*bool(ovf_state&gap<preference_t>::kEitherOvfRight); 
     }
     
-    void move_cur(offset_type value){
-        cur += value; 
-        update_virtual_condition_begin();
-        update_virtual_condition_end();
-    }
+//    void move_cur(offset_type value){
+//        cur += value; 
+//        update_virtual_condition_begin();
+//        update_virtual_condition_end();
+//    }
 
     
     bool virtual_end_f = false; // this member is compromise. i could not express the detection of last elem without this flag.  
