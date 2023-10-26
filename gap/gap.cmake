@@ -7,6 +7,19 @@ git_clone(https://raw.githubusercontent.com/kautils/CMakeFetchKautilModule/v0.0.
 
 CMakeFetchKautilModule(${m}_kautil_btree GIT https://github.com/kautils/btree_search.git REMOTE origin BRANCH v1.0)
 find_package(KautilAlgorithmBtreeSearch.1.0.1.interface REQUIRED)
+string(APPEND ${m}_findpkgs
+    "if(EXISTS \"\\$\\{PACKAGE_PREFIX_DIR}/lib/cmake/KautilAlgorithmBtreeSearch.1.0.1\")\n"
+    "\t set(KautilAlgorithmBtreeSearch.1.0.1_DIR \"\\$\\{PACKAGE_PREFIX_DIR}/lib/cmake/KautilAlgorithmBtreeSearch.1.0.1\")\n"
+    "\t find_package(KautilAlgorithmBtreeSearch.1.0.1.interface REQUIRED)\n"
+    "endif()\n"
+)
+
+
+list(APPEND ${m}_unsetter  ${m}_gap_hpp)
+file(GLOB ${m}_gap_hpp ${CMAKE_CURRENT_LIST_DIR}/*.hpp)
+install(FILES ${${m}_gap_hpp} DESTINATION include/kautil/range/merge )
+install(SCRIPT "${${m}_kautil_btree.BUILD_DIR}/cmake_install.cmake")
+
 
 set(module_name gap)
 unset(srcs)
