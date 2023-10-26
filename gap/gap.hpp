@@ -97,6 +97,9 @@ struct gap{
         
         // virtual pos : if iterator points virtual pos, then input is used as the returned value.   
         // 2),3),5),6),7),8) -> need virtual pos
+        
+        // 2),3),5),6) as is
+        // 7),8) -> -1
         constexpr auto kVirtualNPos = offset_type(-3); 
         vp_l =
                 static_cast<offset_type>(
