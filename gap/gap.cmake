@@ -27,7 +27,7 @@ string(APPEND ${m}_findpkgs
 
 list(APPEND ${m}_unsetter  ${m}_gap_hpp)
 file(GLOB ${m}_gap_hpp ${CMAKE_CURRENT_LIST_DIR}/*.hpp)
-install(FILES ${${m}_gap_hpp} DESTINATION include/kautil/range/merge )
+install(FILES ${${m}_gap_hpp} DESTINATION include/kautil/range/gap )
 install(SCRIPT "${${${m}_kautil_btree.STRUCT_ID}.BUILD_DIR}/cmake_install.cmake")
 
 
@@ -44,7 +44,7 @@ set(${module_name}_common_pref
     EXPORT_VERSION ${PROJECT_VERSION}
     EXPORT_VERSION_COMPATIBILITY AnyNewerVersion
         
-    DESTINATION_INCLUDE_DIR include/kautil/range
+    DESTINATION_INCLUDE_DIR include/kautil/range/gap
     DESTINATION_CMAKE_DIR cmake
     DESTINATION_LIB_DIR lib
 )
