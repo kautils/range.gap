@@ -77,7 +77,7 @@ struct gap2_iterator{
     ~gap2_iterator(){}
     
     
-    struct current{ value_type r;value_type l; };
+    struct current{ value_type l;value_type r; }__attribute__((__aligned__(8)));
     self_type & operator++(){
         ++cur;
         return *this;
@@ -85,22 +85,37 @@ struct gap2_iterator{
     
     bool operator!=(self_type & l){ return cur != l.cur; }
     current operator*(){ 
+        
+        
+        
         auto res = current{};
-        auto pos = cur*p->kBlockSize-sizeof(value_type);
         
-        if( (cur == vp_l) | (cur == -1) ){
-            res.l = from;
-        }else{
-            auto ptr = &res.l;
-            p->pref->read_value(pos,&ptr);
-        }
+        // ovf(left)  -> 0
+        // ovf(right) -> fsize - sizeof(value_type)
+        auto pos = 
+                  ((cur==-1)|!cur)*0
+                +!((cur==-1)|!cur)*(cur*p->kBlockSize-sizeof(value_type));
         
-        if( (cur == vp_r) | (cur == -1)){
-            res.r = to;
-        }else{
-            auto ptr = &res.r;
-            p->pref->read_value(pos+sizeof(value_type),&ptr);
-        }
+        auto res_ptr = &res;
+        p->pref->read(pos,(void**)&res_ptr,sizeof(current));
+        // auto ptr = (value_type*)0;
+        // ptr = &res.l;
+        // p->pref->read_value(pos,&ptr);
+        // ptr = &res.r;
+        // p->pref->read_value(pos+sizeof(value_type),&ptr);
+        
+        auto l_is_vp = (cur == vp_l) | (cur == -1); 
+        auto r_is_vp = (cur == vp_r) | (cur == -1); 
+        
+        //res.l = r_is_vp*res.r +!r_is_vp*res.l; 
+        res.r = l_is_vp*res.l +!l_is_vp*res.r;
+        
+        res.l = 
+                  l_is_vp*from
+                +!l_is_vp*res.l;
+        res.r = 
+                  r_is_vp*to
+                +!r_is_vp*res.r;
         return res;
     }
     
@@ -303,7 +318,6 @@ int main(){
             { // !c(from) !c(to) : expect {(25,30),(40,45)} idx(1 2) vp (1 2) b,e(1 3)
                 from = 25;to = 45;  
             }
-            
 
             {// !c(from)  c(to) : expect {(25,30),(40,50)} idx(1 2) vp (1 npos) b,e(1 3)
                 from = 25;to = 55; 
@@ -322,11 +336,9 @@ int main(){
                 from = 5;to = 50; 
                 from = 5;to = 60; 
             }
-
             {// ovf(from)  !c(to) : expect {(5,first),(20,30),(40,45)} idx(0 2) vp (0 2) b,e(0 3)
                 from = 5;to = 45; 
             }
-
             {// c(from)  ovf(to) : expect {(20,30)...(last,2000)} idx(1 fsize/blockSize) vp (-3 fsize/blockSize) b,e(1 fsize/blockSize+1)
                 from = 15;to = 2000; 
             }
@@ -343,7 +355,7 @@ int main(){
             {// ovfovf(same(left-side)) : expect {(0,5)}  idx(-1 -1) vp (-1 -1) b,e(0 0)
                 from = 0;to = 5; 
             }
-            
+
             {// ovfovf(same(right-side)) : expect {(2000,2005)} idx(-1 -1) vp (-1 -1) b,e(0 0)
                 from = 2000;to = 2005; 
             }
