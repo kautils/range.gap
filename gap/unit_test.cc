@@ -87,14 +87,15 @@ struct gap2_iterator{
     current operator*(){ 
         auto res = current{};
         auto pos = cur*p->kBlockSize-sizeof(value_type);
-        if(cur == vp_l){
+        
+        if( (cur == vp_l) | (cur == -1) ){
             res.l = from;
         }else{
             auto ptr = &res.l;
             p->pref->read_value(pos,&ptr);
         }
         
-        if(cur == vp_r){
+        if( (cur == vp_r) | (cur == -1)){
             res.r = to;
         }else{
             auto ptr = &res.r;
@@ -299,51 +300,53 @@ int main(){
         constexpr auto kBlockSize = offset_type(sizeof(value_type)*2);
         auto from = value_type(0);auto to = value_type(0);
         {
-            { // !c(from) !c(to) : expect idx(1 2) vp (1 2) b,e(1 3)
-                from = 25;to = 45; 
+            { // !c(from) !c(to) : expect {(25,30),(40,45)} idx(1 2) vp (1 2) b,e(1 3)
+                from = 25;to = 45;  
             }
             
-//            
-//            {// !c(from)  c(to) : expect idx(1 2) vp (1 npos) b,e(1 3)
-//                from = 25;to = 55; 
-//                from = 25;to = 50;
-//                from = 25;to = 60;
-//            }
-//
-//            {// c(from)  c(to) : expect idx(1 2) vp (npos npos) b,e(1 3)
-//                from = 10;to = 55; 
-//                from = 15;to = 55; 
-//                from = 20;to = 55; 
-//            }
-//            
-//            {// ovf(from)  c(to) : expect idx(0 2) vp (0 npos) b,e(0 3)
-//                from = 5;to = 55; 
-//                from = 5;to = 50; 
-//                from = 5;to = 60; 
-//            }
-//            
-//            {// ovf(from)  !c(to) : expect idx(0 2) vp (0 2) b,e(0 3)
-//                from = 5;to = 45; 
-//            }
-//            
-//            {// c(from)  ovf(to) : expect idx(1 fsize/blockSize) vp (-3 fsize/blockSize) b,e(1 fsize/blockSize+1)
-//                from = 15;to = 2000; 
-//            }
-//            
-//            {// !c(from)  ovf(to) : expect idx(1 fsize/blockSize) vp (1 fsize/blockSize) b,e(1 fsize/blockSize+1)
-//                from = 25;to = 2000; 
-//            }
-//            
-//            
-//            {// ovfovf(different) : expect idx(0 fsize/blockSize) vp (0 fsize/blockSize) b,e(0 fsize/blockSize+1)
-//                from = 5;to = 2000; 
-//            }
-//            
-//            {// ovfovf(same) : expect idx(-1 -1) vp (-1 -1) b,e(0 0)
-//                from = 0;to = 5; 
-//                from = 2000;to = 2005; 
-//            }
-//            
+
+            {// !c(from)  c(to) : expect {(25,30),(40,50)} idx(1 2) vp (1 npos) b,e(1 3)
+                from = 25;to = 55; 
+                from = 25;to = 50;
+                from = 25;to = 60;
+            }
+
+            {// c(from)  c(to) : expect {(20,30),(40,50)} idx(1 2) vp (npos npos) b,e(1 3)
+                from = 10;to = 55;  
+                from = 15;to = 55; 
+                from = 20;to = 55; 
+            }
+
+            {// ovf(from)  c(to) : expect {(5,first),(20,30),(40,50)} idx(0 2) vp (0 npos) b,e(0 3)
+                from = 5;to = 55; 
+                from = 5;to = 50; 
+                from = 5;to = 60; 
+            }
+
+            {// ovf(from)  !c(to) : expect {(5,first),(20,30),(40,45)} idx(0 2) vp (0 2) b,e(0 3)
+                from = 5;to = 45; 
+            }
+
+            {// c(from)  ovf(to) : expect {(20,30)...(last,2000)} idx(1 fsize/blockSize) vp (-3 fsize/blockSize) b,e(1 fsize/blockSize+1)
+                from = 15;to = 2000; 
+            }
+
+            {// !c(from)  ovf(to) : expect {(25,30)...(last,2000)} idx(1 fsize/blockSize) vp (1 fsize/blockSize) b,e(1 fsize/blockSize+1)
+                from = 25;to = 2000; 
+            }
+
+
+            {// ovfovf(different) : expect {(5,first)...(last,2000)} idx(0 fsize/blockSize) vp (0 fsize/blockSize) b,e(0 fsize/blockSize+1)
+                from = 5;to = 2000; 
+            }
+
+            {// ovfovf(same(left-side)) : expect {(0,5)}  idx(-1 -1) vp (-1 -1) b,e(0 0)
+                from = 0;to = 5; 
+            }
+            
+            {// ovfovf(same(right-side)) : expect {(2000,2005)} idx(-1 -1) vp (-1 -1) b,e(0 0)
+                from = 2000;to = 2005; 
+            }
             
             printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
         }
