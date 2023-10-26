@@ -167,15 +167,15 @@ int main(){
         auto b0_is_contained = is_contained(b0);
         auto b0_is_even =!bool(b0.nearest_pos%kBlockSize);
         b0.nearest_pos = 
-                 b0.overflow*0 
+                 b0.overflow*-sizeof(value_type)
                +!b0.overflow*(
                     b0_is_contained*(
-                         !b0_is_even*(b0.nearest_pos+sizeof(value_type))
-                        + b0_is_even*b0.nearest_pos 
+                         !b0_is_even*b0.nearest_pos
+                        + b0_is_even*(b0.nearest_pos+sizeof(value_type)) 
                     )
-                  +!b0_is_contained*(
-                         !b0_is_even*(b0.nearest_pos+sizeof(value_type)) 
-                        + b0_is_even*b0.nearest_pos 
+                  +!b0_is_contained*( 
+                         !b0_is_even*(b0.nearest_pos) 
+                        + b0_is_even*(b0.nearest_pos-sizeof(value_type)) 
                   )
                );
         
@@ -184,18 +184,20 @@ int main(){
         auto b1_is_contained = is_contained(b1);
         auto b1_is_even =!bool(b1.nearest_pos%kBlockSize);
         b1.nearest_pos = 
-                 b1.overflow*max_pos 
+                 b1.overflow*(pref.size()-sizeof(value_type)) 
                +!b1.overflow*(
                    b1_is_contained*(
-                         !b1_is_even*b1.nearest_pos 
+                         !b1_is_even*(b1.nearest_pos-kBlockSize) 
                         + b1_is_even*(b1.nearest_pos-sizeof(value_type))
                     )
                   +!b1_is_contained*(
-                         !b1_is_even*b1.nearest_pos
+                         !b1_is_even*(b1.nearest_pos)
                         + b1_is_even*(b1.nearest_pos-sizeof(value_type))
                   )  
                );
         
+        auto b0_idx = static_cast<offset_type>(b0.nearest_pos+sizeof(value_type))/kBlockSize;
+        auto b1_idx = static_cast<offset_type>(b1.nearest_pos+sizeof(value_type))/kBlockSize;
         
         constexpr auto kVirtualNPos = offset_type(-3); 
         auto cond_ovfovf_same = bool(b0.overflow&b1.overflow&(b0.direction==b1.direction));   
@@ -203,9 +205,9 @@ int main(){
                 static_cast<offset_type>(
                       cond_ovfovf_same*(-2)
                     +!cond_ovfovf_same*(
-                          b0.overflow*(-1)
+                          b0.overflow*(0)
                         +!b0.overflow*(
-                          !b0_is_contained*(b0.nearest_pos/sizeof(value_type)-1)
+                          !b0_is_contained*b0_idx
                           +b0_is_contained*(kVirtualNPos)
                         )
                     )
@@ -215,26 +217,30 @@ int main(){
                 static_cast<offset_type>(
                       cond_ovfovf_same*(-1)
                     +!cond_ovfovf_same*(
-                          b1.overflow*(max_pos/kBlockSize+1)
+                          b1.overflow*(max_pos/kBlockSize)
                         +!b1.overflow*(
-                          !b1_is_contained*(b1.nearest_pos/kBlockSize+1)
+                          !b1_is_contained*b1_idx
                           +b1_is_contained*(kVirtualNPos)
                         )
                     )
                 );
+        
+        
     
         auto begin = offset_type(0);
         auto end = offset_type(0);
         auto cur = offset_type(0);
         {// when below condition are satisfied then virtual pos is returned. 
-            b0.overflow&!b0_is_contained&(cur == begin);
-            b1.overflow&!b1_is_contained&(cur == end);
+            b0.overflow&!b0_is_contained&(cur == b0_idx);
+            b1.overflow&!b1_is_contained&(cur == b1_idx);
             cond_ovfovf_same&(cur == begin);
         }
     
         
-        printf("np(%ld %ld) ",b0.nearest_pos,b1.nearest_pos);
-        printf("vp(%ld %ld) ",b0_virtual_pos,b1_virtual_pos);
+        printf("np (%ld %ld)\n ",b0.nearest_pos,b1.nearest_pos);
+        printf("idx(%ld %ld)\n ",b0_idx,b1_idx);
+        printf("vp (%ld %ld)\n ",b0_virtual_pos,b1_virtual_pos);
+        printf("b,e(%ld %ld)\n ",b0_idx,b1_idx+1);
         printf("\n");
         fflush(stdout);        
         
