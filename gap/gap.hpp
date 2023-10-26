@@ -35,8 +35,10 @@ struct gap{
         auto b0 = bt.search(from,false);
         auto b0_is_contained = is_contained(b0);
         auto b0_is_even =!bool(b0.nearest_pos%kBlockSize);
+        
+        // adjust nearest pos of b0 and b1 to sizeof(valuet_type)*n 
         b0.nearest_pos = 
-                 b0.overflow*-sizeof(value_type)
+                 b0.overflow*-sizeof(value_type) 
                +!b0.overflow*(
                     b0_is_contained*(
                          !b0_is_even*b0.nearest_pos
@@ -66,6 +68,24 @@ struct gap{
                );
         
         
+        //there is 8 pattern of pos 
+        // 1) from is contained by region
+        // 2) from is not contained by region
+        // 3) to is contained by region
+        // 4) to is not contained by region
+        // 5) from is overflow
+        // 6) to is overflow
+        // 7) from and to is overflow, and they are in the left. 
+        // 8) from and to is overflow, and they are in the right.
+        
+        // 1) -> right value of range
+        // 2) -> left value of vacant
+        // 3) -> left value of range (move forward this for sizeof(value_type) equals to end()) 
+        // 4) -> right value of vacant  (move forward this for 1 block equals to end()) 
+        // 5) -> 0
+        // 6) -> fsize/blockSize
+        // 7),8) -> -1 
+        
         auto cond_ovfovf_same = (b0.overflow&b1.overflow)&(b0.direction==b1.direction);
         begin_idx = 
                   cond_ovfovf_same*-1
@@ -74,6 +94,9 @@ struct gap{
                   cond_ovfovf_same*-1
                 +!cond_ovfovf_same*(static_cast<offset_type>(b1.nearest_pos+sizeof(value_type))/kBlockSize);
         
+        
+        // virtual pos : if iterator points virtual pos, then input is used as the returned value.   
+        // 2),3),5),6),7),8) -> need virtual pos
         constexpr auto kVirtualNPos = offset_type(-3); 
         vp_l =
                 static_cast<offset_type>(
