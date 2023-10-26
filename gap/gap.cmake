@@ -7,8 +7,12 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
     file(DOWNLOAD https://raw.githubusercontent.com/kautils/CMakeKautilHeader/v0.0.1/CMakeKautilHeader.cmake ${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
 endif()
 include(${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
+
+
+include(R:/flow/CMakeKautilHeader/CMakeKautilHeader.cmake)
 git_clone(https://raw.githubusercontent.com/kautils/CMakeLibrarytemplate/v0.0.1/CMakeLibrarytemplate.cmake)
-git_clone(https://raw.githubusercontent.com/kautils/CMakeFetchKautilModule/v0.0.1/CMakeFetchKautilModule.cmake)
+git_clone(https://raw.githubusercontent.com/kautils/CMakeFetchKautilModule/v1.0/CMakeFetchKautilModule.cmake)
+
 
 
 CMakeFetchKautilModule(${m}_kautil_btree GIT https://github.com/kautils/btree_search.git REMOTE origin BRANCH v1.0)
@@ -24,7 +28,7 @@ string(APPEND ${m}_findpkgs
 list(APPEND ${m}_unsetter  ${m}_gap_hpp)
 file(GLOB ${m}_gap_hpp ${CMAKE_CURRENT_LIST_DIR}/*.hpp)
 install(FILES ${${m}_gap_hpp} DESTINATION include/kautil/range/merge )
-install(SCRIPT "${${m}_kautil_btree.BUILD_DIR}/cmake_install.cmake")
+install(SCRIPT "${${${m}_kautil_btree.STRUCT_ID}.BUILD_DIR}/cmake_install.cmake")
 
 
 set(module_name gap)
