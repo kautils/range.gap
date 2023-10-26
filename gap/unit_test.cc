@@ -1,15 +1,10 @@
 #ifdef TMAIN_KAUTIL_RANGE_GAP_INTERFACE
 
-
-
 #include <vector>
 #include <stdint.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <stdlib.h>
-
-
-#include "gap.hpp"
 
 template<typename premitive>
 struct file_syscall_premitive{
@@ -62,219 +57,7 @@ using file_syscall_16b_pref= file_syscall_premitive<uint64_t>;
 using file_syscall_16b_f_pref= file_syscall_premitive<double>;
 
 
-template<typename pref_t> struct gap2;
-
-template<typename pref_t>
-struct gap2_iterator{
-    
-    
-    using value_type = typename pref_t::value_type;
-    using offset_type = typename pref_t::offset_type;
-    
-    using self_type = gap2_iterator; 
-    
-    gap2_iterator(){}
-    ~gap2_iterator(){}
-    
-    
-    struct current{ value_type l;value_type r; }__attribute__((__aligned__(8)));
-    self_type & operator++(){
-        ++cur;
-        return *this;
-    }
-    
-    bool operator!=(self_type & l){ return cur != l.cur; }
-    current operator*(){ 
-        
-        
-        
-        auto res = current{};
-        
-        // ovf(left)  -> 0
-        // ovf(right) -> fsize - sizeof(value_type)
-        auto pos = 
-                  ((cur==-1)|!cur)*0
-                +!((cur==-1)|!cur)*(cur*p->kBlockSize-sizeof(value_type));
-        
-        auto res_ptr = &res;
-        p->pref->read(pos,(void**)&res_ptr,sizeof(current));
-        // auto ptr = (value_type*)0;
-        // ptr = &res.l;
-        // p->pref->read_value(pos,&ptr);
-        // ptr = &res.r;
-        // p->pref->read_value(pos+sizeof(value_type),&ptr);
-        
-        auto l_is_vp = (cur == vp_l) | (cur == -1); 
-        auto r_is_vp = (cur == vp_r) | (cur == -1); 
-        
-        //res.l = r_is_vp*res.r +!r_is_vp*res.l; 
-        res.r = l_is_vp*res.l +!l_is_vp*res.r;
-        
-        res.l = 
-                  l_is_vp*from
-                +!l_is_vp*res.l;
-        res.r = 
-                  r_is_vp*to
-                +!r_is_vp*res.r;
-        return res;
-    }
-    
-    self_type begin() {
-        auto res = *this;
-        res.cur = p->begin_idx;
-        res.vp_l=p->vp_l;
-        res.vp_r=p->vp_r;
-        res.from=p->from;
-        res.to=p->to;
-        return res;
-    }   
-    
-    self_type end() {
-        auto res = *this;
-        res.cur = p->end_idx;
-        return res;
-    }    
-    
-    offset_type vp_l=0;
-    offset_type vp_r=0;
-    offset_type from=0;
-    offset_type to=0;
-    offset_type cur=0;
-    gap2<pref_t>* p=0;
-};
-
-template<typename pref_t>
-struct gap2{
-    
-    friend struct gap2_iterator<pref_t>;
-    
-    using value_type = typename pref_t::value_type;
-    using offset_type = typename pref_t::offset_type;
-    
-    gap2(pref_t * pref) : pref(pref){}
-    ~gap2(){}
-    
-    static constexpr offset_type kBlockSize = sizeof(value_type)*2;
-    
-    int initialize(value_type f,value_type t){
-        
-        auto is_contained = [](auto & b0){
-            auto block_size =(sizeof(value_type)*2);
-            auto b0_nearest_is_former = !bool(b0.nearest_pos % block_size);
-            auto b0_cond_not_contained = 
-                     (b0_nearest_is_former&(b0.direction < 0))
-                    |(!b0_nearest_is_former&(b0.direction > 0));
-            return !(b0_cond_not_contained|b0.overflow);
-        };
-        
-        
-        from = f;
-        to = t;
-        
-        auto bt = kautil::algorithm::btree_search{pref};
-        auto b0 = bt.search(from,false);
-        auto b0_is_contained = is_contained(b0);
-        auto b0_is_even =!bool(b0.nearest_pos%kBlockSize);
-        b0.nearest_pos = 
-                 b0.overflow*-sizeof(value_type)
-               +!b0.overflow*(
-                    b0_is_contained*(
-                         !b0_is_even*b0.nearest_pos
-                        + b0_is_even*(b0.nearest_pos+sizeof(value_type)) 
-                    )
-                  +!b0_is_contained*( 
-                         !b0_is_even*(b0.nearest_pos) 
-                        + b0_is_even*(b0.nearest_pos-sizeof(value_type)) 
-                  )
-               );
-        
-        
-        auto b1 = bt.search(to,false);
-        auto b1_is_contained = is_contained(b1);
-        auto b1_is_even =!bool(b1.nearest_pos%kBlockSize);
-        b1.nearest_pos = 
-                 b1.overflow*(pref->size()-sizeof(value_type)) 
-               +!b1.overflow*(
-                   b1_is_contained*(
-                         !b1_is_even*(b1.nearest_pos-kBlockSize) 
-                        + b1_is_even*(b1.nearest_pos-sizeof(value_type))
-                    )
-                  +!b1_is_contained*(
-                         !b1_is_even*(b1.nearest_pos)
-                        + b1_is_even*(b1.nearest_pos-sizeof(value_type))
-                  )  
-               );
-        
-        
-        auto cond_ovfovf_same = (b0.overflow&b1.overflow)&(b0.direction==b1.direction);
-        begin_idx = 
-                  cond_ovfovf_same*-1
-                +!cond_ovfovf_same*static_cast<offset_type>(b0.nearest_pos+sizeof(value_type))/kBlockSize;
-        end_idx = 
-                  cond_ovfovf_same*-1
-                +!cond_ovfovf_same*(static_cast<offset_type>(b1.nearest_pos+sizeof(value_type))/kBlockSize);
-        
-        constexpr auto kVirtualNPos = offset_type(-3); 
-        vp_l =
-                static_cast<offset_type>(
-                      cond_ovfovf_same*(-1)
-                    +!cond_ovfovf_same*(
-                          b0.overflow*(0)
-                        +!b0.overflow*(
-                          !b0_is_contained*begin_idx
-                          +b0_is_contained*(kVirtualNPos)
-                        )
-                    )
-                );
-
-        vp_r =
-                static_cast<offset_type>(
-                      cond_ovfovf_same*(-1)
-                    +!cond_ovfovf_same*(
-                          b1.overflow*(pref->size()/kBlockSize)
-                        +!b1.overflow*(
-                          !b1_is_contained*end_idx
-                          +b1_is_contained*(kVirtualNPos)
-                        )
-                    )
-                );
-        
-        end_idx+=1;
-        
-        
-        return 0;
-    }
-    
-    
-    
-    
-    
-    
-    using self_type = gap2<pref_t>;
-    using iterator_type = gap2_iterator<pref_t>;
-    
-    iterator_type iterator(){
-        auto res = iterator_type{};
-        res.p = this;
-        return res;
-    }
-    
-    
-
-
-private:
-    value_type from=0,to=0;
-    offset_type cur=0;
-    offset_type begin_idx=0;
-    offset_type end_idx=0;
-    offset_type vp_l=0;
-    offset_type vp_r=0;
-    
-    
-    pref_t * pref=0;
-};
-
-
+#include "gap.hpp"
 
 int main(){
     
@@ -305,170 +88,103 @@ int main(){
                 |(!b0_nearest_is_former&(b0.direction > 0));
         return !(b0_cond_not_contained|b0.overflow);
     };
-//    {
-        auto pref = file_syscall_16b_pref{.fd=fileno(f_ranges)};
-        auto bt = kautil::algorithm::btree_search{&pref};
-        
-        auto max_pos = pref.size()-sizeof(value_type);
-        auto min_pos = 0;
-        
-        constexpr auto kBlockSize = offset_type(sizeof(value_type)*2);
-        auto from = value_type(0);auto to = value_type(0);
-        {
-            { // !c(from) !c(to) : expect {(25,30),(40,45)} idx(1 2) vp (1 2) b,e(1 3)
-                from = 25;to = 45;  
-            }
+    
+    auto pref = file_syscall_16b_pref{.fd=fileno(f_ranges)};
+    auto max_pos = pref.size()-sizeof(value_type);
+    auto min_pos = 0;
+    
+    constexpr auto kBlockSize = offset_type(sizeof(value_type)*2);
+    auto from = value_type(0);auto to = value_type(0);
+    {
+        { // !c(from) !c(to) : expect {(25,30),(40,45)} idx(1 2) vp (1 2) b,e(1 3)
+            from = 25;to = 45;  
+        }
 
-            {// !c(from)  c(to) : expect {(25,30),(40,50)} idx(1 2) vp (1 npos) b,e(1 3)
-                from = 25;to = 55; 
-                from = 25;to = 50;
-                from = 25;to = 60;
-            }
+        {// !c(from)  c(to) : expect {(25,30),(40,50)} idx(1 2) vp (1 npos) b,e(1 3)
+            from = 25;to = 55; 
+            from = 25;to = 50;
+            from = 25;to = 60;
+        }
 
-            {// c(from)  c(to) : expect {(20,30),(40,50)} idx(1 2) vp (npos npos) b,e(1 3)
-                from = 10;to = 55;  
-                from = 15;to = 55; 
-                from = 20;to = 55; 
-            }
+        {// c(from)  c(to) : expect {(20,30),(40,50)} idx(1 2) vp (npos npos) b,e(1 3)
+            from = 10;to = 55;  
+            from = 15;to = 55; 
+            from = 20;to = 55; 
+        }
 
-            {// ovf(from)  c(to) : expect {(5,first),(20,30),(40,50)} idx(0 2) vp (0 npos) b,e(0 3)
-                from = 5;to = 55; 
-                from = 5;to = 50; 
-                from = 5;to = 60; 
-            }
-            {// ovf(from)  !c(to) : expect {(5,first),(20,30),(40,45)} idx(0 2) vp (0 2) b,e(0 3)
-                from = 5;to = 45; 
-            }
-            {// c(from)  ovf(to) : expect {(20,30)...(last,2000)} idx(1 fsize/blockSize) vp (-3 fsize/blockSize) b,e(1 fsize/blockSize+1)
-                from = 15;to = 2000; 
-            }
+        {// ovf(from)  c(to) : expect {(5,first),(20,30),(40,50)} idx(0 2) vp (0 npos) b,e(0 3)
+            from = 5;to = 55; 
+            from = 5;to = 50; 
+            from = 5;to = 60; 
+        }
+        {// ovf(from)  !c(to) : expect {(5,first),(20,30),(40,45)} idx(0 2) vp (0 2) b,e(0 3)
+            from = 5;to = 45; 
+        }
+        {// c(from)  ovf(to) : expect {(20,30)...(last,2000)} idx(1 fsize/blockSize) vp (-3 fsize/blockSize) b,e(1 fsize/blockSize+1)
+            from = 15;to = 2000; 
+        }
 
-            {// !c(from)  ovf(to) : expect {(25,30)...(last,2000)} idx(1 fsize/blockSize) vp (1 fsize/blockSize) b,e(1 fsize/blockSize+1)
-                from = 25;to = 2000; 
-            }
+        {// !c(from)  ovf(to) : expect {(25,30)...(last,2000)} idx(1 fsize/blockSize) vp (1 fsize/blockSize) b,e(1 fsize/blockSize+1)
+            from = 25;to = 2000; 
+        }
 
 
-            {// ovfovf(different) : expect {(5,first)...(last,2000)} idx(0 fsize/blockSize) vp (0 fsize/blockSize) b,e(0 fsize/blockSize+1)
-                from = 5;to = 2000; 
-            }
+        {// ovfovf(different) : expect {(5,first)...(last,2000)} idx(0 fsize/blockSize) vp (0 fsize/blockSize) b,e(0 fsize/blockSize+1)
+            from = 5;to = 2000; 
+        }
 
-            {// ovfovf(same(left-side)) : expect {(0,5)}  idx(-1 -1) vp (-1 -1) b,e(0 0)
-                from = 0;to = 5; 
-            }
+        {// ovfovf(same(left-side)) : expect {(0,5)}  idx(-1 -1) vp (-1 -1) b,e(0 0)
+            from = 0;to = 5; 
+        }
 
-            {// ovfovf(same(right-side)) : expect {(2000,2005)} idx(-1 -1) vp (-1 -1) b,e(0 0)
-                from = 2000;to = 2005; 
-            }
-            
-            printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
+        {// ovfovf(same(right-side)) : expect {(2000,2005)} idx(-1 -1) vp (-1 -1) b,e(0 0)
+            from = 2000;to = 2005; 
         }
         
-        auto b0 = bt.search(from,false);
-        auto b0_is_contained = is_contained(b0);
-        auto b0_is_even =!bool(b0.nearest_pos%kBlockSize);
-        b0.nearest_pos = 
-                 b0.overflow*-sizeof(value_type)
-               +!b0.overflow*(
-                    b0_is_contained*(
-                         !b0_is_even*b0.nearest_pos
-                        + b0_is_even*(b0.nearest_pos+sizeof(value_type)) 
-                    )
-                  +!b0_is_contained*( 
-                         !b0_is_even*(b0.nearest_pos) 
-                        + b0_is_even*(b0.nearest_pos-sizeof(value_type)) 
-                  )
-               );
+        from = 5;to = 2000; 
         
-        
-        auto b1 = bt.search(to,false);
-        auto b1_is_contained = is_contained(b1);
-        auto b1_is_even =!bool(b1.nearest_pos%kBlockSize);
-        b1.nearest_pos = 
-                 b1.overflow*(pref.size()-sizeof(value_type)) 
-               +!b1.overflow*(
-                   b1_is_contained*(
-                         !b1_is_even*(b1.nearest_pos-kBlockSize) 
-                        + b1_is_even*(b1.nearest_pos-sizeof(value_type))
-                    )
-                  +!b1_is_contained*(
-                         !b1_is_even*(b1.nearest_pos)
-                        + b1_is_even*(b1.nearest_pos-sizeof(value_type))
-                  )  
-               );
-        
-        
-        
-        auto cond_ovfovf_same = (b0.overflow&b1.overflow)&(b0.direction==b1.direction);
-        auto b0_idx = 
-                  cond_ovfovf_same*-1
-                +!cond_ovfovf_same*static_cast<offset_type>(b0.nearest_pos+sizeof(value_type))/kBlockSize;
-        auto b1_idx = 
-                  cond_ovfovf_same*-1
-                +!cond_ovfovf_same*static_cast<offset_type>(b1.nearest_pos+sizeof(value_type))/kBlockSize;
-        
-        constexpr auto kVirtualNPos = offset_type(-3); 
-        auto b0_virtual_pos =
-                static_cast<offset_type>(
-                      cond_ovfovf_same*(-1)
-                    +!cond_ovfovf_same*(
-                          b0.overflow*(0)
-                        +!b0.overflow*(
-                          !b0_is_contained*b0_idx
-                          +b0_is_contained*(kVirtualNPos)
-                        )
-                    )
-                );
-
-        auto b1_virtual_pos =
-                static_cast<offset_type>(
-                      cond_ovfovf_same*(-1)
-                    +!cond_ovfovf_same*(
-                          b1.overflow*(pref.size()/kBlockSize)
-                        +!b1.overflow*(
-                          !b1_is_contained*b1_idx
-                          +b1_is_contained*(kVirtualNPos)
-                        )
-                    )
-                );
-        
-        
-        
-    
-        auto begin = offset_type(0);
-        auto end = offset_type(0);
-        auto cur = offset_type(0);
-        {// when below condition are satisfied then virtual pos is returned. 
-            b0.overflow&!b0_is_contained&(cur == b0_idx);
-            b1.overflow&!b1_is_contained&(cur == b1_idx);
-            cond_ovfovf_same&(cur == begin);
-        }
-    
-        
-        printf("np (%ld %ld)\n ",b0.nearest_pos,b1.nearest_pos);
-        printf("idx(%ld %ld)\n ",b0_idx,b1_idx);
-        printf("vp (%ld %ld)\n ",b0_virtual_pos,b1_virtual_pos);
-        printf("b,e(%ld %ld)\n ",b0_idx,b1_idx+1);
-        printf("\n");
-        fflush(stdout);        
-        
-    
-        
-    auto gp = gap2{&pref};
-    gp.initialize(from,to);
-    auto itr = gp.iterator();
-    for(auto const& elem : gp.iterator() ){
-        
-        printf("l,r(%lld,%lld)\n",elem.l,elem.r);
-        fflush(stdout);
-        
-        
+        printf("from,to(%lld,%lld)\n",from,to);fflush(stdout);
     }
-    
         
-        
-    
-    
-    
+    auto gp = gap{&pref};
+    gp.initialize(from,to);
+    {// entire
+        for(auto const& elem : gp ){
+            printf("l,r(%lld,%lld)\n",elem.l,elem.r);
+            fflush(stdout);
+        }
+    }
+
+    {// increment/decrement
+        auto c = gp.begin();
+        auto e = gp.end();
+        auto lmb_print = [](auto elem){
+            auto e = *elem;
+            printf("%lld %lld\n",e.l,e.r); fflush(stdout);
+        };
+        lmb_print(c);
+        lmb_print(++c);
+        lmb_print(++c);
+        lmb_print(--c);
+        lmb_print(--c);
+        lmb_print(c+=2);
+        lmb_print(c-=2);
+        lmb_print(++c);
+        lmb_print(c--);
+        lmb_print(c++);
+    }
+
+
+    {// reinitialize
+        gp.initialize(2000,2005);
+        {// entire
+            for(auto const& elem : gp ){
+                printf("l,r(%lld,%lld)\n",elem.l,elem.r);
+                fflush(stdout);
+            }
+        }
+    }
+
     
     
     
