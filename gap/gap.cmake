@@ -52,12 +52,16 @@ set(${module_name}_common_pref
 CMakeLibraryTemplate(${module_name} EXPORT_LIB_TYPE interface ${${module_name}_common_pref} )
 #CMakeLibraryTemplate(${module_name} EXPORT_LIB_TYPE shared ${${module_name}_common_pref} )
 
+
+if(${BUILD_TEST})
+
 set(__t ${${module_name}_interface_tmain})
 add_executable(${__t})
 target_sources(${__t} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/unit_test.cc)
 target_link_libraries(${__t} PRIVATE ${${module_name}_interface})
 target_compile_definitions(${__t} PRIVATE ${${module_name}_interface_tmain_ppcs})
 
+endif()
 
 foreach(__v ${${m}_unsetter})
     unset(${__v})
