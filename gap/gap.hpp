@@ -4,6 +4,9 @@
 #include "kautil/algorithm/btree_search/btree_search.hpp"
 
 
+namespace kautil{
+namespace range{
+
 template<typename pref_t>
 struct gap{
     
@@ -191,6 +194,11 @@ private:
     
     pref_t * pref=0;
 };
+
+
+
+} //namespace range{
+} //namespace kautil{
 
 
 
