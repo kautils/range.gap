@@ -14,7 +14,7 @@ struct gap{
     using offset_type = typename pref_t::offset_type;
     
     gap(pref_t * pref) : pref(pref){}
-    ~gap(){}
+    virtual ~gap(){}
     
     static constexpr offset_type kBlockSize = sizeof(value_type)*2;
     
