@@ -2,11 +2,17 @@ set(${PROJECT_NAME}_m_evacu ${m})
 set(m ${PROJECT_NAME})
 list(APPEND ${m}_unsetter )
 
-
-if(NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
-    file(DOWNLOAD https://raw.githubusercontent.com/kautils/CMakeKautilHeader/v0.0.1/CMakeKautilHeader.cmake ${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
+set(${m}_kautil_cmake_heeder CMakeKautilHeader.v0.0.cmake)
+if(DEFINED KAUTIL_THIRD_PARTY_DIR AND EXISTS "${KAUTIL_THIRD_PARTY_DIR}/${${m}_kautil_cmake_heeder}")
+    include("${KAUTIL_THIRD_PARTY_DIR}/${${m}_kautil_cmake_heeder}")
+else()
+    if(NOT EXISTS ${CMAKE_BINARY_DIR}/${${m}_kautil_cmake_heeder})
+        file(DOWNLOAD https://raw.githubusercontent.com/kautils/CMakeKautilHeader/v0.0/CMakeKautilHeader.cmake ${CMAKE_BINARY_DIR}/${${m}_kautil_cmake_heeder})
+    endif()
+    include(${CMAKE_BINARY_DIR}/${${m}_kautil_cmake_heeder})
 endif()
-include(${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
+
+
 git_clone(https://raw.githubusercontent.com/kautils/CMakeLibrarytemplate/v0.0.1/CMakeLibrarytemplate.cmake)
 git_clone(https://raw.githubusercontent.com/kautils/CMakeFetchKautilModule/v1.0/CMakeFetchKautilModule.cmake)
 
