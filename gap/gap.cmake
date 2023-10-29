@@ -7,9 +7,6 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
     file(DOWNLOAD https://raw.githubusercontent.com/kautils/CMakeKautilHeader/v0.0.1/CMakeKautilHeader.cmake ${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
 endif()
 include(${CMAKE_BINARY_DIR}/CMakeKautilHeader.cmake)
-
-
-include(R:/flow/CMakeKautilHeader/CMakeKautilHeader.cmake)
 git_clone(https://raw.githubusercontent.com/kautils/CMakeLibrarytemplate/v0.0.1/CMakeLibrarytemplate.cmake)
 git_clone(https://raw.githubusercontent.com/kautils/CMakeFetchKautilModule/v1.0/CMakeFetchKautilModule.cmake)
 
